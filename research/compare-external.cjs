@@ -30,7 +30,7 @@ result('Daren book model 100% lev','2014-10-31','2023-03-10');
 result('Daren book model 0050','2014-10-31','2023-03-10',[1,0,0]);
 result('WalletMap model 4:3:3 annual','2014-10-31','2026-10-29',[.4,.3,.3],{reb:'time',interval:12});
 result('WalletMap model 4:3:3 quarterly','2014-10-31','2026-10-29',[.4,.3,.3],{reb:'time',interval:3});
-result('WalletMap model 4:3:3 exposure 10pp','2014-10-31','2026-10-29',[.4,.3,.3],{reb:'exposure',threshold:.1});
+result('WalletMap model 4:3:3 ratio 5pp','2014-10-31','2026-10-29',[.4,.3,.3],{reb:'ratio',threshold:.05});
 result('WalletMap model 4:3:3 none','2014-10-31','2026-10-29',[.4,.3,.3]);
 result('Chunkai model 0050','2014-10-31','2024-04-30',[1,0,0]);
 result('Chunkai model 50/50 none','2014-10-31','2024-04-30',[0,.5,.5]);

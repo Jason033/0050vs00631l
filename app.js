@@ -55,7 +55,7 @@ function modelReturn(r, c, benchmarkGross){
   return 2*(syntheticGross-1)+(c.collateral-fundFee)*years;
 }
 $('sources').onclick=()=>{document.querySelectorAll('[data-source-tab]').forEach((b,i)=>b.classList.toggle('active',i===0));document.querySelectorAll('[data-source-panel]').forEach((p,i)=>p.classList.toggle('hidden',i!==0));$('sourcesDialog').showModal()};document.querySelectorAll('[data-source-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-source-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-source-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.sourcePanel!==b.dataset.sourceTab))});$('info').onclick=()=>$('assumptions').showModal();$('showTable').onclick=()=>$('spreadDialog').showModal();document.querySelectorAll('.close').forEach(x=>x.onclick=()=>x.closest('dialog').close());
-$('dca').onchange=()=>$('dcaWrap').classList.toggle('hidden',!$('dca').checked);$('reb').onchange=()=>{$('timeFields').classList.toggle('hidden',$('reb').value!=='time');$('thresholdField').classList.toggle('hidden',!['ratio','exposure'].includes($('reb').value))};$('reb').onchange();$('mode').onchange=()=>$('fixedField').classList.toggle('hidden',$('mode').value!=='fixed');$('lifeMode').onchange=()=>$('runsWrap').classList.toggle('hidden',$('lifeMode').value!=='bootstrap');
+$('dca').onchange=()=>$('dcaWrap').classList.toggle('hidden',!$('dca').checked);$('reb').onchange=()=>{$('timeFields').classList.toggle('hidden',$('reb').value!=='time');$('thresholdField').classList.toggle('hidden',$('reb').value!=='ratio')};$('reb').onchange();$('mode').onchange=()=>$('fixedField').classList.toggle('hidden',$('mode').value!=='fixed');$('lifeMode').onchange=()=>$('runsWrap').classList.toggle('hidden',$('lifeMode').value!=='bootstrap');
 function tab(p){page=p;$('tabBack').className=p==='back'?'active':'alt';$('tabLife').className=p==='life'?'active':'alt';$('lifeSettings').classList.toggle('hidden',p!=='life');if(p!=='life')$('lifeProgressWrap').classList.add('hidden');$('resultTitle').textContent=p==='back'?'歷史回測結果':'人生模擬結果';$('result').classList.add('hidden');$('details').classList.add('hidden');$('message').textContent='選好設定，按計算。'}$('tabBack').onclick=()=>tab('back');$('tabLife').onclick=()=>tab('life');
 $('file').onchange=async e=>{try{let text=(await e.target.files[0].text()).replace(/^\ufeff/,'');let lines=text.trim().split(/\r?\n/);let h=lines.shift().split(',').map(v=>v.trim().toLowerCase().replaceAll('"',''));let di=h.findIndex(v=>['date','日期'].includes(v)),pi=h.findIndex(v=>['total_return','adj close','adj_close','adjusted_close','含息指數','還原收盤價'].includes(v));if(di<0||pi<0)throw Error('缺少 date 或 total_return 欄位。');data=lines.map(line=>{let c=line.split(',');return {date:c[di]?.replaceAll('"','').trim(),price:Number(c[pi]?.replaceAll('"','').trim())}}).filter(x=>/^\d{4}-\d\d-\d\d$/.test(x.date)&&x.price>0).sort((a,b)=>a.date.localeCompare(b.date));if(data.length<3)throw Error('能用的資料不到 3 筆。');for(let i=1;i<data.length;i++)if(data[i].date===data[i-1].date)throw Error('日期重複：'+data[i].date);$('start').value=data[0].date;$('end').value=data.at(-1).date;setupDatePickers();$('dataStatus').textContent=`匯入完成：${data.length.toLocaleString()} 筆｜${data[0].date}～${data.at(-1).date}`;}catch(err){data=[];$('dataStatus').textContent='讀不了：'+err.message}};
 function inputs(){const weights=[num('stock')/100,num('lev')/100,num('cash')/100],start=$('start').value,end=$('end').value;if(weights.some(x=>!Number.isFinite(x)||x<0)||Math.abs(weights.reduce((a,b)=>a+b,0)-1)>1e-8)throw Error('0050、正二、現金加起來要等於 100%。');if(num('initial')<0||($('dca').checked&&num('monthly')<0)||(!num('initial')&&!($('dca').checked&&num('monthly')>0)))throw Error('投入金額不對。');if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||start>end)throw Error('日期不對。開始日不能晚於結束日。');if(num('interval')<1||num('threshold')<=0)throw Error('再平衡間隔和門檻要大於 0。');if(num('earlyDividend')<0||num('earlyDividend')>3||num('fixed')<=-100||num('collateral')<-20||num('collateral')>20)throw Error('舊股息、期貨差額或利率設定超出範圍。');return {weights,start,end,initial:num('initial'),monthly:$('dca').checked?num('monthly'):0,reb:$('reb').value,interval:Math.floor(num('interval'))*num('unit'),threshold:num('threshold')/100,mode:$('mode').value,fixed:num('fixed'),earlyDividend:num('earlyDividend'),collateral:num('collateral')/100};}
@@ -90,8 +90,7 @@ function simulate(rows,c,w=c.weights,detail='full'){
     const monthN=yr*12+Number(r.date.slice(5,7)),total=v.reduce((a,b)=>a+b,0);
     const trigger=i>0&&total>0&&!(r.tradable===false&&w[0]>0)&&(
       (c.reb==='time'&&month!==prevMonth&&(monthN-baseMonth)%c.interval===0)||
-      (c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold))||
-      (c.reb==='exposure'&&Math.abs((v[0]+2*v[1])/total-(w[0]+2*w[1]))>=c.threshold));
+      (c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
     if(trigger){
       const beforeValues=[...v],before=total,next=allocate(v,w),after=next.reduce((a,b)=>a+b,0);
       const traded=next.reduce((sum,x,k)=>sum+Math.abs(x-beforeValues[k]),0);
@@ -135,7 +134,7 @@ function simulateLifeYears(yearKeys,grouped,c,w=c.weights,keepCurve=true){
     const before=v.reduce((a,b)=>a+b,0);v[0]*=r.stockGross;v[1]*=r.levGross;let total=v.reduce((a,b)=>a+b,0);if(before>0)unit*=total/before;
     const monthN=y*12+r.month-1,monthChanged=monthN!==prevMonth;
     if(monthChanged&&c.monthly){const old=total;addMoney(v,c.monthly,w);total=v.reduce((a,b)=>a+b,0);unit*=total/(old+c.monthly);invested+=c.monthly}
-    const trigger=day>0&&total>0&&!(r.tradable===false&&w[0]>0)&&((c.reb==='time'&&monthChanged&&(monthN+1)%c.interval===0)||(c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold))||(c.reb==='exposure'&&Math.abs((v[0]+2*v[1])/total-(w[0]+2*w[1]))>=c.threshold));
+    const trigger=day>0&&total>0&&!(r.tradable===false&&w[0]>0)&&((c.reb==='time'&&monthChanged&&(monthN+1)%c.interval===0)||(c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
     if(trigger){const old=total;v=allocate(v,w);total=v.reduce((a,b)=>a+b,0);unit*=total/old}
     if(keepCurve)curve.push({date:String(++day),value:unit,assets:total});else day++;
     prevMonth=monthN;
@@ -143,7 +142,7 @@ function simulateLifeYears(yearKeys,grouped,c,w=c.weights,keepCurve=true){
   return {end:v.reduce((a,b)=>a+b,0),invested,curve};
 }
 let runCount=0,lastRunSignature='';
-function rebalanceLabel(c){if(c.reb==='none')return '不再平衡';if(c.reb==='time')return `每 ${c.interval} 個月`;return `${c.reb==='ratio'?'比例':'曝險'}偏離 ${fmt(c.threshold)}`}
+function rebalanceLabel(c){if(c.reb==='none')return '不再平衡';if(c.reb==='time')return `每 ${c.interval} 個月`;return `比例偏離 ${fmt(c.threshold)}`}
 function markDirty(){if(!$('result').classList.contains('hidden')){$('result').classList.add('stale');$('details').classList.add('stale');$('message').textContent='設定改了。按「重新計算」。'}$('run').textContent='重新計算'}
 document.querySelectorAll('input,select').forEach(el=>{if(el.id!=='file'){el.addEventListener('input',markDirty);el.addEventListener('change',markDirty)}});
 function setLifeProgress(percent,text){

@@ -18,8 +18,8 @@ set('reb','time');set('interval',1);set('unit',3);
 vm.runInContext('run()',sandbox);const rebalanced=document.getElementById('metrics').innerHTML;assert.notEqual(rebalanced,dca);assert.match(document.getElementById('message').textContent,/再平衡 [1-9][0-9]* 次/);
 const {data,simulate}=vm.runInContext('({data,simulate})',sandbox),rows=data.filter(r=>r.date>='2003-07-01'&&r.date<='2026-06-30');
 const base={weights:[.4,.3,.3],mode:'history',earlyDividend:1,collateral:0,fixed:0,initial:1e6,monthly:1e4,reb:'none',interval:3,threshold:.05};
-const none=simulate(rows,base),quarterly=simulate(rows,{...base,reb:'time'}),ratio=simulate(rows,{...base,reb:'ratio'}),exposure=simulate(rows,{...base,reb:'exposure'});
-for(const x of [quarterly,ratio,exposure]){assert(x.rebalanceCount>0);assert.notEqual(x.annual,none.annual);assert.notEqual(x.vol,none.vol);assert.notEqual(x.mdd,none.mdd)}
+const none=simulate(rows,base),quarterly=simulate(rows,{...base,reb:'time'}),ratio=simulate(rows,{...base,reb:'ratio'});
+for(const x of [quarterly,ratio]){assert(x.rebalanceCount>0);assert.notEqual(x.annual,none.annual);assert.notEqual(x.vol,none.vol);assert.notEqual(x.mdd,none.mdd)}
 const single=simulate(rows,{...base,weights:[0,1,0],reb:'time'});assert.equal(single.rebalanceCount,0);
-console.log('repeated calculation, DCA, and all three rebalance methods passed');
-console.log({none:{annual:none.annual,vol:none.vol,mdd:none.mdd},quarterly:{annual:quarterly.annual,vol:quarterly.vol,mdd:quarterly.mdd,count:quarterly.rebalanceCount},ratio:{annual:ratio.annual,vol:ratio.vol,mdd:ratio.mdd,count:ratio.rebalanceCount},exposure:{annual:exposure.annual,vol:exposure.vol,mdd:exposure.mdd,count:exposure.rebalanceCount}});
+console.log('repeated calculation, DCA, and both rebalance methods passed');
+console.log({none:{annual:none.annual,vol:none.vol,mdd:none.mdd},quarterly:{annual:quarterly.annual,vol:quarterly.vol,mdd:quarterly.mdd,count:quarterly.rebalanceCount},ratio:{annual:ratio.annual,vol:ratio.vol,mdd:ratio.mdd,count:ratio.rebalanceCount}});
