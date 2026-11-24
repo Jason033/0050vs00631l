@@ -10,14 +10,14 @@ const sandbox=vm.createContext({window:{marketData:[],addEventListener(){}},docu
 for(const name of ['data0.js','data1.js','data2.js','data3.js','data4.js','market-meta.js','app.js']){
   vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),sandbox,{filename:name});
 }
-const {data,modelReturn,simulate,earlyDividend,averageLogCarry,annual}=vm.runInContext('({data,modelReturn,simulate,earlyDividend,averageLogCarry,annual})',sandbox);
-const config={weights:[0,1,0],mode:'history',earlyDividend,collateral:0,fixed:0,initial:100,monthly:0,reb:'none'};
+const {data,modelReturn,simulate,earlyDividends,fundingRates,cashRates,averageLogCarry,annual}=vm.runInContext('({data,modelReturn,simulate,earlyDividends,fundingRates,cashRates,averageLogCarry,annual})',sandbox);
+const config={weights:[0,1,0],mode:'history',earlyDividend:1,collateral:0,fixed:0,initial:100,monthly:0,reb:'none'};
 const gross=(rows,fn)=>rows.reduce((v,r)=>v*fn(r),1);
 const model=(rows)=>gross(rows,r=>1+modelReturn(r,config,r.benchmarkGross))-1;
 const pct=x=>(x*100).toFixed(4);
 const base=data.filter(r=>r.date<='2001-12-31');
 const raw=base.at(-1).market/base[0].market;
-const dividend=gross(base.slice(1),r=>Math.pow(1+earlyDividend,r.divFraction));
+const dividend=gross(base.slice(1),r=>Math.pow(1+(earlyDividends[r.date.slice(0,4)]??0),r.divFraction));
 assert(Math.abs(raw-5551.24/92.48)<1e-5);
 assert(Math.abs(dividend-16179.60/5551.24)<1e-9);
 console.log('1967–2001:', pct(raw**(1/35)-1), pct((raw*dividend)**(1/35)-1), dividend);
@@ -59,17 +59,22 @@ for(const v of [monthlyModels,monthlyActual]){
 }
 const stress=simulate(data,config);
 assert(stress.end>0&&stress.mdd<0&&stress.vol>0&&Number.isFinite(stress.annual));
-document.getElementById('earlyDividend').value=earlyDividend*100;
-Object.entries({stock:0,lev:50,cash:50,reb:'time',interval:1,unit:3,initial:1000000,dca:true,monthly:3000,start:1967,end:2026,threshold:5,mode:'history',lifeMode:'bootstrap',years:40,runs:100}).forEach(([k,v])=>document.getElementById(k)[k==='dca'?'checked':'value']=v);
+document.getElementById('earlyDividend').value=1;
+Object.entries({stock:0,lev:50,cash:50,reb:'time',interval:1,unit:3,initial:1000000,dca:true,monthly:3000,start:'1967-01-05',end:'2026-11-23',threshold:5,mode:'history',lifeMode:'bootstrap',years:40,runs:100}).forEach(([k,v])=>document.getElementById(k)[k==='dca'?'checked':'value']=v);
 vm.runInContext("page='life'; run()",sandbox);
 assert.equal(document.getElementById('range').textContent,'40 年・100 組');
 assert.match(document.getElementById('metrics').innerHTML,/虧損比例/);
 console.log('40-year bootstrap and full history ran');
+document.getElementById('start').value='2020-01-04';
+document.getElementById('end').value='2020-01-12';
+vm.runInContext("page='back'; run()",sandbox);
+assert.equal(document.getElementById('range').textContent,'2020-01-06 至 2020-01-10');
+console.log('date range skips closed days correctly');
 const span=data.filter(r=>r.date<='2006-12-31');
-for(const assumed of [.015,earlyDividend,.045]){
+for(const assumed of [.5,1,1.5]){
   const result=simulate(span,{...config,earlyDividend:assumed});
   const benchmark=simulate(span,{...config,earlyDividend:assumed},[1,0,0]);
-  console.log('early dividend sensitivity',pct(assumed),pct(result.annual),pct(benchmark.annual));
+  console.log('early dividend multiplier',assumed.toFixed(1),pct(result.annual),pct(benchmark.annual));
 }
 console.log('0050 Jan–Sep 2026:',pct(gross(data.filter(r=>r.date>='2026-01-01'&&r.date<='2026-09-23'),r=>r.benchmarkGross)-1));
 const fitWindow=data.filter(r=>r.date>='2015-01-05'&&r.date<='2026-10-27');
@@ -85,7 +90,7 @@ for(const [label,wind,w] of [['model quarterly',fitWindow,quarterly.weights],['0
   console.log('FinLab cross-check',label,pct(q.annual),pct(q.mdd),pct(q.vol));
 }
 
-for(const assumed of [-.02,0,Math.expm1(averageLogCarry)]){
-  const result=simulate(span,{...config,earlyCarry:assumed});
-  console.log('pre-launch futures basis sensitivity',pct(assumed),pct(result.annual));
+for(const assumed of [-2,0,Math.expm1(averageLogCarry)*100]){
+  const result=simulate(span,{...config,mode:'fixed',fixed:assumed});
+  console.log('fixed annual difference sensitivity',assumed.toFixed(2)+'%',pct(result.annual));
 }

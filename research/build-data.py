@@ -103,8 +103,28 @@ for year, items in groupby(range(1, len(dates)), key=lambda i: dates[i][:4]):
     spot = market[dates[ids[-1]]] / market[dates[ids[0]-1]]-1
     annual[year] = [spot, future]
 ave = sum(math.log((1+v[1])/(1+v[0])) for y,v in annual.items() if 2004 <= int(y) <= 2025) / 22
+# 1967–2002 cash dividends: long-window academic endpoint plus the independently
+# observed 1986–2000 and 1998–2002 segments.  Annual rates are spread over
+# trading days only because public daily ex-dividend points are unavailable.
+early_dividends = {str(y): .048569499414659933 for y in range(1967, 1986)}
+early_dividends.update({str(y): .010336051550390302 for y in range(1986, 1998)})
+early_dividends.update({'1998': .00587, '1999': .009, '2000': .00847,
+                        '2001': .02222, '2002': .02625})
+# CBC annual averages.  1967–68 backfill the first usable 1969 observation;
+# 1969–80 use one-month deposits and 1981–98 use overnight interbank rates.
+funding_rates = {'1967':.054,'1968':.054,'1969':.054,'1970':.0537,'1971':.04763333,
+ '1972':.05375,'1973':.05875,'1974':.09625,'1975':.07708333,'1976':.07333333,
+ '1977':.05541667,'1978':.0525,'1979':.0725,'1980':.09125,'1981':.1386,
+ '1982':.1083,'1983':.0692,'1984':.0653,'1985':.0633,'1986':.0398,'1987':.0414,
+ '1988':.0488,'1989':.0734,'1990':.1049,'1991':.0739,'1992':.06883,
+ '1993':.06345,'1994':.06132,'1995':.06191,'1996':.05439,'1997':.06845,'1998':.06556}
+rp_pct = {1998:5.928,1999:4.080,2000:4.335,2001:3.192,2002:1.666,2003:.822,
+ 2004:.781,2005:1.124,2006:1.432,2007:1.758,2008:1.678,2009:.158,2010:.292,
+ 2011:.604,2012:.731,2013:.639,2014:.554,2015:.510,2016:.332,2017:.338,
+ 2018:.356,2019:.462,2020:.310,2021:.187,2022:.528,2023:1.066,2024:1.286,2025:1.354}
+cash_rates = {str(y): v/100 for y,v in rp_pct.items()}
 emit('market-meta.js', 'marketMeta', {'counts':counts,'annual':annual,'averageLogCarry':ave,
-                                   'earlyDividend': (16179.60/5551.24)**(1/35)-1})
+ 'earlyDividends':early_dividends,'fundingRates':funding_rates,'cashRates':cash_rates})
 for j in range(5):
     part = portfolio[j*3500:(j+1)*3500]
     assert len(part) < 4000

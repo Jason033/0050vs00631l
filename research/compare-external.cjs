@@ -7,8 +7,8 @@ const fields=new Map();
 const document={getElementById(id){if(!fields.has(id))fields.set(id,{value:0,classList:{toggle(){},add(){},remove(){}},addEventListener(){}});return fields.get(id);},querySelectorAll(){return []}};
 const sandbox=vm.createContext({window:{marketData:[],addEventListener(){}},document});
 for(const name of ['data0.js','data1.js','data2.js','data3.js','data4.js','market-meta.js','app.js'])vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),sandbox,{filename:name});
-const {data,simulate,earlyDividend}=vm.runInContext('({data,simulate,earlyDividend})',sandbox);
-const base={weights:[0,1,0],mode:'history',earlyDividend,collateral:0,fixed:0,earlyCarry:0,initial:100,monthly:0,reb:'none',interval:1,threshold:.1};
+const {data,simulate}=vm.runInContext('({data,simulate})',sandbox);
+const base={weights:[0,1,0],mode:'history',earlyDividend:1,collateral:0,fixed:0,earlyCarry:0,initial:100,monthly:0,reb:'none',interval:1,threshold:.1};
 const pct=x=>(x*100).toFixed(2)+'%';
 const result=(label,start,end,weights=base.weights,extra={})=>{
   const rows=data.filter(r=>r.date>=start&&r.date<=end);
