@@ -17,7 +17,7 @@ def fred(series):
     response=requests.get(url,params={'id':series,'cosd':start,'coed':'2026-11-23'},timeout=40)
     response.raise_for_status()
     df=pd.read_csv(io.StringIO(response.text),na_values='.')
-    df.iloc[:,0]=pd.to_datetime(df.iloc[:,0]);return pd.Series(pd.to_numeric(df.iloc[:,1],errors='coerce').to_numpy(),index=df.iloc[:,0]).dropna()
+    return pd.Series(pd.to_numeric(df.iloc[:,1],errors='coerce').to_numpy(),index=pd.to_datetime(df.iloc[:,0])).dropna()
 fx=fred('DEXTAUS');rate=fred('DFF')
 if fx.index.min()>pd.Timestamp('2000-07-01') or rate.index.min()>pd.Timestamp('2000-07-01') or fx.index.max()<pd.Timestamp('2026-10-01'):
     raise RuntimeError('FRED history is incomplete')
