@@ -62,7 +62,8 @@ function inputs(){const weights=[num('stock')/100,num('lev')/100,num('cash')/100
 function allocate(v,w){let lo=0,hi=v.reduce((a,b)=>a+b,0);for(let j=0;j<55;j++){let m=(lo+hi)/2;let cost=0;for(let k=0;k<2;k++){let diff=m*w[k]-v[k];cost+=diff>=0?diff*fee:-diff*(fee+tax)}let total=v[0]+v[1]+v[2];if(m+cost>total)hi=m;else lo=m}return w.map(x=>x*lo)}
 function addMoney(v,amount,w){let net=amount/(1+fee*(w[0]+w[1]));for(let k=0;k<3;k++)v[k]+=net*w[k]}
 function yearsDiff(a,b){return (Date.parse(b)-Date.parse(a))/86400000/365.2425}function xirr(flows,lastDate,lastValue){let ts=flows.map(x=>[yearsDiff(flows[0][0],x[0]),x[1]]);ts.push([yearsDiff(flows[0][0],lastDate),lastValue]);const f=r=>ts.reduce((s,[t,v])=>s+v/Math.pow(1+r,t),0);let low=-.999999,high=1;while(f(high)>0&&high<1e7)high=high*2+1;if(f(low)*f(high)>0)return NaN;for(let i=0;i<100;i++){let m=(low+high)/2;if(f(m)>0)low=m;else high=m}return (low+high)/2}
-function simulate(rows,c,w=c.weights){
+function simulate(rows,c,w=c.weights,detail='full'){
+  const full=detail==='full',keepCurve=detail!=='end';
   let v=[0,0,0],flows=[],invested=0,unit=1,peak=1,mdd=0,rets=[],curve=[],prevMonth='';
   let accountPeak=0,accountMdd=0,contributionCount=0,rebalanceCount=0,tradingCosts=0,turnover=0;
   const baseMonth=Number(rows[0].date.slice(0,4))*12+Number(rows[0].date.slice(5,7));
@@ -75,17 +76,16 @@ function simulate(rows,c,w=c.weights){
       const levRet=modelReturn({...r,elapsed:r.elapsed??yearsDiff(rows[i-1].date,r.date),divFraction:r.divFraction??0},c,benchmarkGross);
       v[0]*=Math.max(0,1+daily);v[1]*=Math.max(0,1+levRet);
       const after=v.reduce((a,b)=>a+b,0),dr=before>0?after/before-1:0;
-      unit*=1+dr;rets.push(dr);peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);
-      if(accountPeak>0)accountMdd=Math.min(accountMdd,after/accountPeak-1);
+      unit*=1+dr;
+      if(full){rets.push(dr);peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);if(accountPeak>0)accountMdd=Math.min(accountMdd,after/accountPeak-1)}
     }
     const deposit=(i===0?c.initial:0)+(month!==prevMonth?c.monthly:0);
     if(deposit){
       const before=v.reduce((a,b)=>a+b,0);addMoney(v,deposit,w);
       const after=v.reduce((a,b)=>a+b,0),factor=after/(before+deposit);
-      contributionCount++;tradingCosts+=Math.max(0,before+deposit-after);
-      unit*=factor;peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);
-      if(rets.length)rets[rets.length-1]=(1+rets.at(-1))*factor-1;
-      flows.push([r.date,-deposit]);invested+=deposit;accountPeak=Math.max(accountPeak,after);
+      contributionCount++;tradingCosts+=Math.max(0,before+deposit-after);unit*=factor;
+      if(full){peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);if(rets.length)rets[rets.length-1]=(1+rets.at(-1))*factor-1;flows.push([r.date,-deposit]);accountPeak=Math.max(accountPeak,after)}
+      invested+=deposit;
     }
     const monthN=yr*12+Number(r.date.slice(5,7)),total=v.reduce((a,b)=>a+b,0);
     const trigger=i>0&&total>0&&!(r.tradable===false&&w[0]>0)&&(
@@ -96,14 +96,14 @@ function simulate(rows,c,w=c.weights){
       const beforeValues=[...v],before=total,next=allocate(v,w),after=next.reduce((a,b)=>a+b,0);
       const traded=next.reduce((sum,x,k)=>sum+Math.abs(x-beforeValues[k]),0);
       if(traded>.01){rebalanceCount++;turnover+=traded;tradingCosts+=Math.max(0,before-after)}
-      v=next;const factor=after/before;unit*=factor;peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);
-      if(rets.length)rets[rets.length-1]=(1+rets.at(-1))*factor-1;
-      if(accountPeak>0)accountMdd=Math.min(accountMdd,after/accountPeak-1);
+      v=next;const factor=after/before;unit*=factor;
+      if(full){peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);if(rets.length)rets[rets.length-1]=(1+rets.at(-1))*factor-1;if(accountPeak>0)accountMdd=Math.min(accountMdd,after/accountPeak-1)}
     }
-    const assets=v.reduce((a,b)=>a+b,0);accountPeak=Math.max(accountPeak,assets);
-    curve.push({date:r.date,value:unit,assets});prevMonth=month;
+    const assets=v.reduce((a,b)=>a+b,0);if(full)accountPeak=Math.max(accountPeak,assets);
+    if(keepCurve)curve.push({date:r.date,value:unit,assets});prevMonth=month;
   }
   const end=v.reduce((a,b)=>a+b,0),duration=Math.max(yearsDiff(rows[0].date,rows.at(-1).date),1/365);
+  if(!full)return {end,invested,curve};
   const mean=rets.reduce((a,b)=>a+b,0)/(rets.length||1);
   const vol=Math.sqrt(rets.reduce((a,b)=>a+(b-mean)**2,0)/Math.max(1,rets.length-1)*(rets.length/duration));
   return {end,invested,gain:end-invested,ret:invested?end/invested-1:NaN,annual:flows.length?xirr(flows,rows.at(-1).date,end):NaN,
@@ -171,7 +171,7 @@ async function run(){
     if(!paths.length)throw Error('這段資料湊不出完整投資年數。');
     const results=[];
     for(let i=0;i<paths.length;i++){
-      const a=simulate(paths[i],c),b=simulate(paths[i],c,[1,0,0]);results.push({a,b});
+      const a=simulate(paths[i],c,c.weights,'curve'),b=simulate(paths[i],c,[1,0,0],'end');results.push({a,b});
       if(i%2===0||i===paths.length-1){setLifeProgress(20+76*(i+1)/paths.length,`正在回測：${i+1}／${paths.length}`);await yieldUi()}
     }
     setLifeProgress(98,'整理結果…');await yieldUi();
