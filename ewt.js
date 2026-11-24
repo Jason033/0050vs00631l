@@ -12,6 +12,7 @@
   const vals=[[{date:rows[0][0],value:1}]],names=['EWT 模擬正二'];
   vals.push([{date:rows[0][0],value:1}]);names.push('大盤模擬正二（台指期）');
   if(range==='actual'){vals.push([{date:rows[0][0],value:1}]);names.push('00631L 實盤')}
+  if(range==='ewt'){vals.push([{date:rows[0][0],value:1}]);names.push('EWT 原型')}
   let ewt=1,future2=1,lastTaiwan=initMarket,prev=rows[0];
   for(let i=1;i<rows.length;i++){
    const r=rows[i],days=yearly(Date.parse(r[0])-Date.parse(prev[0]));
@@ -21,6 +22,7 @@
    vals[0].push({date:r[0],value:ewt});
    vals[1].push({date:r[0],value:future2});
    if(range==='actual')vals[2].push({date:r[0],value:lastTaiwan.lever?lastTaiwan.lever/baseLever:vals[2].at(-1).value});
+   if(range==='ewt')vals[2].push({date:r[0],value:r[1]/rows[0][1]});
    prev=r;
   }
   return {rows,vals,names};
