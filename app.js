@@ -18,23 +18,9 @@ $('start').min=$('end').min=data[0].date;
 $('start').max=$('end').max=data.at(-1).date;
 $('start').value=data[0].date;
 $('end').value=data.at(-1).date;
-function daysInMonth(year,month){return new Date(Number(year),Number(month),0).getDate()}
-function optionList(from,to,suffix){let html='';for(let n=from;n<=to;n++)html+=`<option value="${String(n).padStart(suffix==='年'?4:2,'0')}">${n}${suffix}</option>`;return html}
-function syncDatePicker(prefix){
-  const year=$(prefix+'Year').value,month=$(prefix+'Month').value,day=$(prefix+'Day');
-  const keep=Math.min(Number(day.value)||1,daysInMonth(year,month));
-  day.innerHTML=optionList(1,daysInMonth(year,month),'日');day.value=String(keep).padStart(2,'0');
-  $(prefix).value=`${year}-${month}-${day.value}`;
-}
 function setupDatePickers(){
-  const firstYear=Number(data[0].date.slice(0,4)),lastYear=Number(data.at(-1).date.slice(0,4));
-  for(const prefix of ['start','end']){
-    const value=$(prefix).value||data[prefix==='start'?0:data.length-1].date,[year,month,day]=value.split('-');
-    $(prefix+'Year').innerHTML=optionList(firstYear,lastYear,'年');$(prefix+'Month').innerHTML=optionList(1,12,'月');
-    $(prefix+'Year').value=year;$(prefix+'Month').value=month;$(prefix+'Day').innerHTML=optionList(1,daysInMonth(year,month),'日');$(prefix+'Day').value=day;
-    for(const part of ['Year','Month','Day'])$(prefix+part).onchange=()=>syncDatePicker(prefix);
-    syncDatePicker(prefix);
-  }
+  $('start').min=$('end').min=data[0].date;$('start').max=$('end').max=data.at(-1).date;
+  if(!$('start').value)$('start').value=data[0].date;if(!$('end').value)$('end').value=data.at(-1).date;
 }
 setupDatePickers();
 $('earlyDividend').value='1.00';
