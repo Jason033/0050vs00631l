@@ -5,11 +5,12 @@ const path=require('node:path');
 const vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
 const fields=new Map();
-const document={getElementById(id){if(!fields.has(id))fields.set(id,{value:0,classList:{toggle(){},add(){},remove(){}},addEventListener(){}});return fields.get(id);},querySelectorAll(){return []}};
+const document={getElementById(id){if(!fields.has(id))fields.set(id,{value:0,checked:false,textContent:'',innerHTML:'',style:{},disabled:false,classList:{_s:new Set(),toggle(x,on){on?this._s.add(x):this._s.delete(x)},add(x){this._s.add(x)},remove(x){this._s.delete(x)},contains(x){return this._s.has(x)}},addEventListener(){},getContext(){return{}},getBoundingClientRect(){return{left:0,width:1000}}});return fields.get(id);},querySelectorAll(){return []}};
 const sandbox=vm.createContext({window:{marketData:[],addEventListener(){}},document});
 for(const name of ['data0.js','data1.js','data2.js','data3.js','data4.js','market-meta.js','app.js']){
   vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),sandbox,{filename:name});
 }
+(async()=>{
 const {data,modelReturn,simulate,earlyDividends,fundingRates,cashRates,averageLogCarry,annual}=vm.runInContext('({data,modelReturn,simulate,earlyDividends,fundingRates,cashRates,averageLogCarry,annual})',sandbox);
 const config={weights:[0,1,0],mode:'history',earlyDividend:1,collateral:0,fixed:0,initial:100,monthly:0,reb:'none'};
 const gross=(rows,fn)=>rows.reduce((v,r)=>v*fn(r),1);
@@ -61,13 +62,20 @@ const stress=simulate(data,config);
 assert(stress.end>0&&stress.mdd<0&&stress.vol>0&&Number.isFinite(stress.annual));
 document.getElementById('earlyDividend').value=1;
 Object.entries({stock:0,lev:50,cash:50,reb:'time',interval:1,unit:3,initial:1000000,dca:true,monthly:3000,start:'1967-01-05',end:'2026-11-23',threshold:5,mode:'history',lifeMode:'bootstrap',years:40,runs:100}).forEach(([k,v])=>document.getElementById(k)[k==='dca'?'checked':'value']=v);
-vm.runInContext("page='life'; run()",sandbox);
+await vm.runInContext("page='life'; run()",sandbox);
 assert.equal(document.getElementById('range').textContent,'40 年・100 組');
 assert.match(document.getElementById('metrics').innerHTML,/虧錢機率/);
+assert.equal(document.getElementById('lifeProgressPct').textContent,'100%');
+assert.equal(document.getElementById('lifeProgressText').textContent,'完成');
 console.log('40-year bootstrap and full history ran');
+document.getElementById('startYear').value='2020';
+document.getElementById('startMonth').value='02';
+document.getElementById('startDay').value='29';
+vm.runInContext("syncDatePicker('start')",sandbox);
+assert.equal(document.getElementById('start').value,'2020-02-29');
 document.getElementById('start').value='2020-01-04';
 document.getElementById('end').value='2020-01-12';
-vm.runInContext("page='back'; run()",sandbox);
+await vm.runInContext("page='back'; run()",sandbox);
 assert.equal(document.getElementById('range').textContent,'2020-01-06 至 2020-01-10');
 console.log('date range skips closed days correctly');
 const span=data.filter(r=>r.date<='2006-12-31');
@@ -94,3 +102,4 @@ for(const assumed of [-2,0,Math.expm1(averageLogCarry)*100]){
   const result=simulate(span,{...config,mode:'fixed',fixed:assumed});
   console.log('fixed annual difference sensitivity',assumed.toFixed(2)+'%',pct(result.annual));
 }
+})().catch(err=>{console.error(err);process.exitCode=1});

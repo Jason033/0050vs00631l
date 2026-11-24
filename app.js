@@ -18,6 +18,25 @@ $('start').min=$('end').min=data[0].date;
 $('start').max=$('end').max=data.at(-1).date;
 $('start').value=data[0].date;
 $('end').value=data.at(-1).date;
+function daysInMonth(year,month){return new Date(Number(year),Number(month),0).getDate()}
+function optionList(from,to,suffix){let html='';for(let n=from;n<=to;n++)html+=`<option value="${String(n).padStart(suffix==='年'?4:2,'0')}">${n}${suffix}</option>`;return html}
+function syncDatePicker(prefix){
+  const year=$(prefix+'Year').value,month=$(prefix+'Month').value,day=$(prefix+'Day');
+  const keep=Math.min(Number(day.value)||1,daysInMonth(year,month));
+  day.innerHTML=optionList(1,daysInMonth(year,month),'日');day.value=String(keep).padStart(2,'0');
+  $(prefix).value=`${year}-${month}-${day.value}`;
+}
+function setupDatePickers(){
+  const firstYear=Number(data[0].date.slice(0,4)),lastYear=Number(data.at(-1).date.slice(0,4));
+  for(const prefix of ['start','end']){
+    const value=$(prefix).value||data[prefix==='start'?0:data.length-1].date,[year,month,day]=value.split('-');
+    $(prefix+'Year').innerHTML=optionList(firstYear,lastYear,'年');$(prefix+'Month').innerHTML=optionList(1,12,'月');
+    $(prefix+'Year').value=year;$(prefix+'Month').value=month;$(prefix+'Day').innerHTML=optionList(1,daysInMonth(year,month),'日');$(prefix+'Day').value=day;
+    for(const part of ['Year','Month','Day'])$(prefix+part).onchange=()=>syncDatePicker(prefix);
+    syncDatePicker(prefix);
+  }
+}
+setupDatePickers();
 $('earlyDividend').value='1.00';
 const print=x=>(x>=0?'+':'')+(x*100).toFixed(2)+'%';
 $('spreadTable').innerHTML=Object.entries(annual).map(([yr,[s,f]])=>
@@ -37,8 +56,8 @@ function modelReturn(r, c, benchmarkGross){
 }
 $('sources').onclick=()=>{document.querySelectorAll('[data-source-tab]').forEach((b,i)=>b.classList.toggle('active',i===0));document.querySelectorAll('[data-source-panel]').forEach((p,i)=>p.classList.toggle('hidden',i!==0));$('sourcesDialog').showModal()};document.querySelectorAll('[data-source-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-source-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-source-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.sourcePanel!==b.dataset.sourceTab))});$('info').onclick=()=>$('assumptions').showModal();$('showTable').onclick=()=>$('spreadDialog').showModal();document.querySelectorAll('.close').forEach(x=>x.onclick=()=>x.closest('dialog').close());
 $('dca').onchange=()=>$('dcaWrap').classList.toggle('hidden',!$('dca').checked);$('reb').onchange=()=>{$('timeFields').classList.toggle('hidden',$('reb').value!=='time');$('thresholdField').classList.toggle('hidden',!['ratio','exposure'].includes($('reb').value))};$('reb').onchange();$('mode').onchange=()=>$('fixedField').classList.toggle('hidden',$('mode').value!=='fixed');$('lifeMode').onchange=()=>$('runsWrap').classList.toggle('hidden',$('lifeMode').value!=='bootstrap');
-function tab(p){page=p;$('tabBack').className=p==='back'?'active':'alt';$('tabLife').className=p==='life'?'active':'alt';$('lifeSettings').classList.toggle('hidden',p!=='life');$('resultTitle').textContent=p==='back'?'歷史回測結果':'人生模擬結果';$('result').classList.add('hidden');$('details').classList.add('hidden');$('message').textContent='選好設定，按計算。'}$('tabBack').onclick=()=>tab('back');$('tabLife').onclick=()=>tab('life');
-$('file').onchange=async e=>{try{let text=(await e.target.files[0].text()).replace(/^\ufeff/,'');let lines=text.trim().split(/\r?\n/);let h=lines.shift().split(',').map(v=>v.trim().toLowerCase().replaceAll('"',''));let di=h.findIndex(v=>['date','日期'].includes(v)),pi=h.findIndex(v=>['total_return','adj close','adj_close','adjusted_close','含息指數','還原收盤價'].includes(v));if(di<0||pi<0)throw Error('缺少 date 或 total_return 欄位。');data=lines.map(line=>{let c=line.split(',');return {date:c[di]?.replaceAll('"','').trim(),price:Number(c[pi]?.replaceAll('"','').trim())}}).filter(x=>/^\d{4}-\d\d-\d\d$/.test(x.date)&&x.price>0).sort((a,b)=>a.date.localeCompare(b.date));if(data.length<3)throw Error('能用的資料不到 3 筆。');for(let i=1;i<data.length;i++)if(data[i].date===data[i-1].date)throw Error('日期重複：'+data[i].date);$('start').min=$('end').min=data[0].date;$('start').max=$('end').max=data.at(-1).date;$('start').value=data[0].date;$('end').value=data.at(-1).date;$('dataStatus').textContent=`匯入完成：${data.length.toLocaleString()} 筆｜${data[0].date}～${data.at(-1).date}`;}catch(err){data=[];$('dataStatus').textContent='讀不了：'+err.message}};
+function tab(p){page=p;$('tabBack').className=p==='back'?'active':'alt';$('tabLife').className=p==='life'?'active':'alt';$('lifeSettings').classList.toggle('hidden',p!=='life');if(p!=='life')$('lifeProgressWrap').classList.add('hidden');$('resultTitle').textContent=p==='back'?'歷史回測結果':'人生模擬結果';$('result').classList.add('hidden');$('details').classList.add('hidden');$('message').textContent='選好設定，按計算。'}$('tabBack').onclick=()=>tab('back');$('tabLife').onclick=()=>tab('life');
+$('file').onchange=async e=>{try{let text=(await e.target.files[0].text()).replace(/^\ufeff/,'');let lines=text.trim().split(/\r?\n/);let h=lines.shift().split(',').map(v=>v.trim().toLowerCase().replaceAll('"',''));let di=h.findIndex(v=>['date','日期'].includes(v)),pi=h.findIndex(v=>['total_return','adj close','adj_close','adjusted_close','含息指數','還原收盤價'].includes(v));if(di<0||pi<0)throw Error('缺少 date 或 total_return 欄位。');data=lines.map(line=>{let c=line.split(',');return {date:c[di]?.replaceAll('"','').trim(),price:Number(c[pi]?.replaceAll('"','').trim())}}).filter(x=>/^\d{4}-\d\d-\d\d$/.test(x.date)&&x.price>0).sort((a,b)=>a.date.localeCompare(b.date));if(data.length<3)throw Error('能用的資料不到 3 筆。');for(let i=1;i<data.length;i++)if(data[i].date===data[i-1].date)throw Error('日期重複：'+data[i].date);$('start').value=data[0].date;$('end').value=data.at(-1).date;setupDatePickers();$('dataStatus').textContent=`匯入完成：${data.length.toLocaleString()} 筆｜${data[0].date}～${data.at(-1).date}`;}catch(err){data=[];$('dataStatus').textContent='讀不了：'+err.message}};
 function inputs(){const weights=[num('stock')/100,num('lev')/100,num('cash')/100],start=$('start').value,end=$('end').value;if(weights.some(x=>!Number.isFinite(x)||x<0)||Math.abs(weights.reduce((a,b)=>a+b,0)-1)>1e-8)throw Error('0050、正二、現金加起來要等於 100%。');if(num('initial')<0||($('dca').checked&&num('monthly')<0)||(!num('initial')&&!($('dca').checked&&num('monthly')>0)))throw Error('投入金額不對。');if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||start>end)throw Error('日期不對。開始日不能晚於結束日。');if(num('interval')<1||num('threshold')<=0)throw Error('再平衡間隔和門檻要大於 0。');if(num('earlyDividend')<0||num('earlyDividend')>3||num('fixed')<=-100||num('collateral')<-20||num('collateral')>20)throw Error('舊股息、期貨差額或利率設定超出範圍。');return {weights,start,end,initial:num('initial'),monthly:$('dca').checked?num('monthly'):0,reb:$('reb').value,interval:Math.floor(num('interval'))*num('unit'),threshold:num('threshold')/100,mode:$('mode').value,fixed:num('fixed'),earlyDividend:num('earlyDividend'),collateral:num('collateral')/100};}
 function allocate(v,w){let lo=0,hi=v.reduce((a,b)=>a+b,0);for(let j=0;j<55;j++){let m=(lo+hi)/2;let cost=0;for(let k=0;k<2;k++){let diff=m*w[k]-v[k];cost+=diff>=0?diff*fee:-diff*(fee+tax)}let total=v[0]+v[1]+v[2];if(m+cost>total)hi=m;else lo=m}return w.map(x=>x*lo)}
 function addMoney(v,amount,w){let net=amount/(1+fee*(w[0]+w[1]));for(let k=0;k<3;k++)v[k]+=net*w[k]}
@@ -101,4 +120,74 @@ let runCount=0,lastRunSignature='';
 function rebalanceLabel(c){if(c.reb==='none')return '不再平衡';if(c.reb==='time')return `每 ${c.interval} 個月`;return `${c.reb==='ratio'?'比例':'曝險'}偏離 ${fmt(c.threshold)}`}
 function markDirty(){if(!$('result').classList.contains('hidden')){$('result').classList.add('stale');$('details').classList.add('stale');$('message').textContent='設定改了。按「重新計算」。'}$('run').textContent='重新計算'}
 document.querySelectorAll('input,select').forEach(el=>{if(el.id!=='file'){el.addEventListener('input',markDirty);el.addEventListener('change',markDirty)}});
-function run(){try{if(!data.length)throw Error('沒有資料。先匯入每日含息資料。');const c=inputs();let rows=data.filter(x=>x.date>=c.start&&x.date<=c.end);if(rows.length<3)throw Error('這段日期資料太少，算不了。');$('result').classList.remove('hidden');$('details').classList.remove('hidden');if(page==='back'){let a=simulate(rows,c),b=simulate(rows,c,[1,0,0]);runCount++;const signature=JSON.stringify(c),changed=signature!==lastRunSignature;lastRunSignature=signature;$('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');$('range').textContent=rows[0].date+' 至 '+rows.at(-1).date;$('message').textContent=`算完了（第 ${runCount} 次）｜${changed?'已用新設定':'設定沒變，重算結果相同'}｜投入 ${a.contributionCount} 次｜再平衡 ${a.rebalanceCount} 次｜${rebalanceLabel(c)}`;$('metrics').innerHTML=metric('最後有多少',money(a.end))+metric('總共投入',money(a.invested))+metric('總報酬',fmt(a.ret))+metric('你的年化（XIRR）',fmt(a.annual))+metric('年化波動',fmt(a.vol))+metric('最大回撤',fmt(a.mdd))+($('dca').checked?metric('帳戶回撤（有算入金）',fmt(a.accountMdd)):'');$('metricNote').textContent=$('dca').checked?'你的年化有算每次加碼時間。波動和最大回撤不把存款當報酬；帳戶回撤則把入金後的帳戶金額算進去。':'波動和回撤已扣交易費。';$('comparison').innerHTML=`<table><tr><th>看什麼</th><th>你的設定</th><th>全買 0050／大盤</th></tr>${[['最後有多少',money(a.end),money(b.end)],['總共投入',money(a.invested),money(b.invested)],['總報酬',fmt(a.ret),fmt(b.ret)],['你的年化（XIRR）',fmt(a.annual),fmt(b.annual)],['策略本身年化（不算加碼）',fmt(a.twrAnnual),fmt(b.twrAnnual)],['年化波動',fmt(a.vol),fmt(b.vol)],['最大回撤',fmt(a.mdd),fmt(b.mdd)],['帳戶回撤（有算入金）',fmt(a.accountMdd),fmt(b.accountMdd)],['投入次數',String(a.contributionCount),String(b.contributionCount)],['再平衡次數',String(a.rebalanceCount),String(b.rebalanceCount)],['交易成本',money(a.tradingCosts),money(b.tradingCosts)]].map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')}</table>`;displayChart([a.curve,b.curve],['你的設定','全買 0050／大盤']);}else{let years=Math.floor(num('years'));if(years<1||years>70)throw Error('投資年數只能填 1～70 年。');let paths=[];if($('lifeMode').value==='historical'){for(let i=0;i<rows.length;i++){let target=new Date(rows[i].date+'T00:00:00Z');target.setUTCFullYear(target.getUTCFullYear()+years);let end=target.toISOString().slice(0,10);if(end>rows.at(-1).date)break;let j=i+1;while(j<rows.length&&rows[j].date<end)j++;if(j<rows.length)paths.push(rows.slice(i,j+1))}if(paths.length>1000)paths=paths.filter((_,i)=>i%Math.ceil(paths.length/1000)===0)}else{let grouped={};for(let i=1;i<rows.length;i++){let year=rows[i].date.slice(0,4);(grouped[year]??=[]).push({...rows[i],benchmarkGross:rows[i].benchmarkGross??rows[i].price/rows[i-1].price,elapsed:rows[i].elapsed??yearsDiff(rows[i-1].date,rows[i].date),divFraction:rows[i].divFraction??0})}let keys=Object.keys(grouped).filter(y=>grouped[y].length>=200&&y!==rows[0].date.slice(0,4)&&y!==rows.at(-1).date.slice(0,4));if(!keys.length)throw Error('完整年度資料不夠，不能隨機重組。');let n=Math.min(2000,Math.max(100,Math.floor(num('runs'))));for(let r=0;r<n;r++){let synthetic=[{date:'1999-12-31',price:1}];for(let y=0;y<years;y++){let key=keys[Math.floor(Math.random()*keys.length)];for(const item of grouped[key]){let date=String(2000+y)+item.date.slice(4);if(date.endsWith('02-29')&&new Date(date+'T00:00:00Z').getUTCMonth()!==1){date=String(2000+y)+'-02-28'}synthetic.push({...item,date})}}paths.push(synthetic)}}if(!paths.length)throw Error('這段資料湊不出完整投資年數。');let results=paths.map(p=>{let a=simulate(p,c),b=simulate(p,c,[1,0,0]);return {a,b}});runCount++;const signature=JSON.stringify({page,c,years,lifeMode:$('lifeMode').value,runs:num('runs')}),changed=signature!==lastRunSignature;lastRunSignature=signature;$('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');$('message').textContent=`算完了（第 ${runCount} 次）｜${changed?'已用新設定':'設定沒變，重算結果相同'}｜每段都重跑投入、費用和再平衡`;$('metricNote').textContent='虧錢機率和勝率都有算投入時間、交易費和再平衡。';let ends=results.map(x=>x.a.end),loss=results.filter(x=>x.a.end<x.a.invested).length/results.length,win=results.filter(x=>x.a.end>x.b.end).length/results.length;$('range').textContent=`${years} 年・${results.length} 組`;$('metrics').innerHTML=metric('通常最後有多少（中位數）',money(quantile(ends,.5)))+metric('虧錢機率',fmt(loss))+metric('贏過 0050／大盤',fmt(win))+metric('較差情況（後 10%）',money(quantile(ends,.1)))+metric('較好情況（前 10%）',money(quantile(ends,.9)))+metric('總共投入',money(results[0].a.invested));$('comparison').innerHTML='<p class="hint">對照組：投入時間、金額都一樣，全部買 0050／大盤。歷史區間可能重疊；隨機重組也不是真實連續歷史。</p>';let quantiles=[.1,.5,.9].map(q=>Array.from({length:81},(_,i)=>({date:String(i),value:quantile(results.map(x=>sampleAt(x.a.curve,i/80)),q)})));displayChart(quantiles,['較差情況（後 10%）','中位數','較好情況（前 10%）'],true);return}$('chart').style.display='block'}catch(e){$('message').textContent=e.message;$('result').classList.add('hidden');$('details').classList.add('hidden');$('run').textContent='重新計算'}}$('run').onclick=run;
+function setLifeProgress(percent,text){
+  const value=Math.max(0,Math.min(100,Math.round(percent)));
+  $('lifeProgressWrap').classList.remove('hidden');$('lifeProgressText').textContent=text;$('lifeProgressPct').textContent=value+'%';$('lifeProgressBar').style.width=value+'%';
+}
+function yieldUi(){return new Promise(resolve=>typeof requestAnimationFrame==='function'?requestAnimationFrame(()=>resolve()):resolve())}
+function lowerBoundDate(rows,date,from=0){let lo=from,hi=rows.length;while(lo<hi){const mid=(lo+hi)>>1;if(rows[mid].date<date)lo=mid+1;else hi=mid}return lo}
+async function run(){
+  try{
+    if(!data.length)throw Error('沒有資料。先匯入每日含息資料。');
+    const c=inputs();let rows=data.filter(x=>x.date>=c.start&&x.date<=c.end);
+    if(rows.length<3)throw Error('這段日期資料太少，算不了。');
+    $('result').classList.remove('hidden');$('details').classList.remove('hidden');
+    if(page==='back'){
+      $('lifeProgressWrap').classList.add('hidden');
+      const a=simulate(rows,c),b=simulate(rows,c,[1,0,0]);runCount++;
+      const signature=JSON.stringify(c),changed=signature!==lastRunSignature;lastRunSignature=signature;
+      $('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');
+      $('range').textContent=rows[0].date+' 至 '+rows.at(-1).date;
+      $('message').textContent=`算完了（第 ${runCount} 次）｜${changed?'已用新設定':'設定沒變，重算結果相同'}｜投入 ${a.contributionCount} 次｜再平衡 ${a.rebalanceCount} 次｜${rebalanceLabel(c)}`;
+      $('metrics').innerHTML=metric('最後有多少',money(a.end))+metric('總共投入',money(a.invested))+metric('總報酬',fmt(a.ret))+metric('你的年化（XIRR）',fmt(a.annual))+metric('年化波動',fmt(a.vol))+metric('最大回撤',fmt(a.mdd))+($('dca').checked?metric('帳戶回撤（有算入金）',fmt(a.accountMdd)):'');
+      $('metricNote').textContent=$('dca').checked?'你的年化有算每次加碼時間。波動和最大回撤不把存款當報酬；帳戶回撤則把入金後的帳戶金額算進去。':'波動和回撤已扣交易費。';
+      $('comparison').innerHTML=`<table><tr><th>看什麼</th><th>你的設定</th><th>全買 0050／大盤</th></tr>${[['最後有多少',money(a.end),money(b.end)],['總共投入',money(a.invested),money(b.invested)],['總報酬',fmt(a.ret),fmt(b.ret)],['你的年化（XIRR）',fmt(a.annual),fmt(b.annual)],['策略本身年化（不算加碼）',fmt(a.twrAnnual),fmt(b.twrAnnual)],['年化波動',fmt(a.vol),fmt(b.vol)],['最大回撤',fmt(a.mdd),fmt(b.mdd)],['帳戶回撤（有算入金）',fmt(a.accountMdd),fmt(b.accountMdd)],['投入次數',String(a.contributionCount),String(b.contributionCount)],['再平衡次數',String(a.rebalanceCount),String(b.rebalanceCount)],['交易成本',money(a.tradingCosts),money(b.tradingCosts)]].map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')}</table>`;
+      displayChart([a.curve,b.curve],['你的設定','全買 0050／大盤']);return;
+    }
+    const years=Math.floor(num('years'));if(years<1||years>70)throw Error('投資年數只能填 1～70 年。');
+    $('run').disabled=true;setLifeProgress(1,'準備資料…');await yieldUi();
+    let paths=[];
+    if($('lifeMode').value==='historical'){
+      for(let i=0;i<rows.length;i++){
+        const target=new Date(rows[i].date+'T00:00:00Z');target.setUTCFullYear(target.getUTCFullYear()+years);
+        const endDate=target.toISOString().slice(0,10);if(endDate>rows.at(-1).date)break;
+        const j=lowerBoundDate(rows,endDate,i+1);if(j<rows.length)paths.push(rows.slice(i,j+1));
+        if(i%100===0){setLifeProgress(3+15*i/rows.length,`整理歷史區間：${paths.length.toLocaleString()} 組`);await yieldUi()}
+      }
+      if(paths.length>1000)paths=paths.filter((_,i)=>i%Math.ceil(paths.length/1000)===0);
+    }else{
+      const grouped={};
+      for(let i=1;i<rows.length;i++){const year=rows[i].date.slice(0,4);(grouped[year]??=[]).push({...rows[i],benchmarkGross:rows[i].benchmarkGross??rows[i].price/rows[i-1].price,elapsed:rows[i].elapsed??yearsDiff(rows[i-1].date,rows[i].date),divFraction:rows[i].divFraction??0})}
+      const keys=Object.keys(grouped).filter(y=>grouped[y].length>=200&&y!==rows[0].date.slice(0,4)&&y!==rows.at(-1).date.slice(0,4));
+      if(!keys.length)throw Error('完整年度資料不夠，不能隨機重組。');
+      const n=Math.min(2000,Math.max(100,Math.floor(num('runs'))));
+      for(let r=0;r<n;r++){
+        const synthetic=[{date:'1999-12-31',price:1}];
+        for(let y=0;y<years;y++){const key=keys[Math.floor(Math.random()*keys.length)];for(const item of grouped[key]){let date=String(2000+y)+item.date.slice(4);if(date.endsWith('02-29')&&new Date(date+'T00:00:00Z').getUTCMonth()!==1)date=String(2000+y)+'-02-28';synthetic.push({...item,date})}}
+        paths.push(synthetic);
+        if(r%5===0){setLifeProgress(3+15*(r+1)/n,`建立隨機人生：${r+1}／${n}`);await yieldUi()}
+      }
+    }
+    if(!paths.length)throw Error('這段資料湊不出完整投資年數。');
+    const results=[];
+    for(let i=0;i<paths.length;i++){
+      const a=simulate(paths[i],c),b=simulate(paths[i],c,[1,0,0]);results.push({a,b});
+      if(i%2===0||i===paths.length-1){setLifeProgress(20+76*(i+1)/paths.length,`正在回測：${i+1}／${paths.length}`);await yieldUi()}
+    }
+    setLifeProgress(98,'整理結果…');await yieldUi();
+    runCount++;const signature=JSON.stringify({page,c,years,lifeMode:$('lifeMode').value,runs:num('runs')}),changed=signature!==lastRunSignature;lastRunSignature=signature;
+    $('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');
+    $('message').textContent=`算完了（第 ${runCount} 次）｜${changed?'已用新設定':'設定沒變，重算結果相同'}｜每段都重跑投入、費用和再平衡`;
+    $('metricNote').textContent='虧錢機率和勝率都有算投入時間、交易費和再平衡。';
+    const ends=results.map(x=>x.a.end),loss=results.filter(x=>x.a.end<x.a.invested).length/results.length,win=results.filter(x=>x.a.end>x.b.end).length/results.length;
+    $('range').textContent=`${years} 年・${results.length} 組`;
+    $('metrics').innerHTML=metric('通常最後有多少（中位數）',money(quantile(ends,.5)))+metric('虧錢機率',fmt(loss))+metric('贏過 0050／大盤',fmt(win))+metric('較差情況（後 10%）',money(quantile(ends,.1)))+metric('較好情況（前 10%）',money(quantile(ends,.9)))+metric('總共投入',money(results[0].a.invested));
+    $('comparison').innerHTML='<p class="hint">對照組：投入時間、金額都一樣，全部買 0050／大盤。歷史區間可能重疊；隨機重組也不是真實連續歷史。</p>';
+    const quantiles=[.1,.5,.9].map(q=>Array.from({length:81},(_,i)=>({date:String(i),value:quantile(results.map(x=>sampleAt(x.a.curve,i/80)),q)})));
+    displayChart(quantiles,['較差情況（後 10%）','中位數','較好情況（前 10%）'],true);setLifeProgress(100,'完成');
+  }catch(e){
+    $('message').textContent=e.message;$('result').classList.add('hidden');$('details').classList.add('hidden');$('run').textContent='重新計算';
+    if(page==='life'&&!$('lifeProgressWrap').classList.contains('hidden'))setLifeProgress(100,'計算失敗');
+  }finally{$('run').disabled=false}
+}
+$('run').onclick=()=>run();
