@@ -63,7 +63,7 @@ document.getElementById('earlyDividend').value=1;
 Object.entries({stock:0,lev:50,cash:50,reb:'time',interval:1,unit:3,initial:1000000,dca:true,monthly:3000,start:'1967-01-05',end:'2026-11-23',threshold:5,mode:'history',lifeMode:'bootstrap',years:40,runs:100}).forEach(([k,v])=>document.getElementById(k)[k==='dca'?'checked':'value']=v);
 vm.runInContext("page='life'; run()",sandbox);
 assert.equal(document.getElementById('range').textContent,'40 年・100 組');
-assert.match(document.getElementById('metrics').innerHTML,/虧損比例/);
+assert.match(document.getElementById('metrics').innerHTML,/虧錢機率/);
 console.log('40-year bootstrap and full history ran');
 document.getElementById('start').value='2020-01-04';
 document.getElementById('end').value='2020-01-12';
