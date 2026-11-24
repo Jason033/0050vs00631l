@@ -17,3 +17,9 @@
 - [資料來源與重建](research/SOURCES.md)
 
 驗證：`node research/audit.cjs && node research/audit-early.cjs`
+
+## 計算口徑
+
+每次按下「重新計算」都會重新讀取日期、投入金額、三資產配置及再平衡設定。結果會列出實際投入次數、再平衡次數與交易成本。定期定額的年化採 XIRR；策略波動與策略回撤排除入金，另列帳戶最大回撤。
+
+回歸測試：`node research/recalc-regression.cjs`。
