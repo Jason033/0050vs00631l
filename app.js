@@ -150,7 +150,7 @@ function setLifeProgress(percent,text){
   const value=Math.max(0,Math.min(100,Math.round(percent)));
   $('lifeProgressWrap').classList.remove('hidden');$('lifeProgressText').textContent=text;$('lifeProgressPct').textContent=value+'%';$('lifeProgressBar').style.width=value+'%';
 }
-function yieldUi(){return new Promise(resolve=>typeof requestAnimationFrame==='function'?requestAnimationFrame(()=>resolve()):resolve())}
+function yieldUi(){return new Promise(resolve=>{if(typeof MessageChannel==='function'){const channel=new MessageChannel();channel.port1.onmessage=()=>resolve();channel.port2.postMessage(0)}else resolve()})}
 function lowerBoundDate(rows,date,from=0){let lo=from,hi=rows.length;while(lo<hi){const mid=(lo+hi)>>1;if(rows[mid].date<date)lo=mid+1;else hi=mid}return lo}
 async function run(){
   try{
