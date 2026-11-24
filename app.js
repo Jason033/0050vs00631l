@@ -155,19 +155,21 @@ function prepareLifeYears(rows,c){
   return grouped;
 }
 function simulateLifeYears(yearKeys,grouped,c,w=c.weights,keepCurve=true){
-  let v=[0,0,0],invested=0,unit=1,prevMonth=0,day=0,curve=[];
+  let v=[0,0,0],invested=0,unit=1,prevMonth=0,day=0,curve=[],yearEnds=[];
   const first=c.initial+c.monthly;if(first){addMoney(v,first,w);invested+=first;unit=v.reduce((a,b)=>a+b,0)/first}
   if(keepCurve)curve.push({date:'0',value:unit,assets:v.reduce((a,b)=>a+b,0),invested});
-  for(let y=0;y<yearKeys.length;y++)for(const r of grouped[yearKeys[y]]){
+  for(let y=0;y<yearKeys.length;y++){for(const r of grouped[yearKeys[y]]){
     const before=v.reduce((a,b)=>a+b,0);v[0]*=r.stockGross;v[1]*=r.levGross;let total=v.reduce((a,b)=>a+b,0);if(before>0)unit*=total/before;
     const monthN=y*12+r.month-1,monthChanged=monthN!==prevMonth;
     if(monthChanged&&c.monthly){const old=total;addMoney(v,c.monthly,w);total=v.reduce((a,b)=>a+b,0);unit*=total/(old+c.monthly);invested+=c.monthly}
-    const trigger=day>0&&total>0&&!(r.tradable===false&&w[0]>0)&&((c.reb==='time'&&monthChanged&&(monthN+1)%c.interval===0)||(c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
+    const trigger=day>0&&total>0&&!(r.tradable===false&&w[0]>0)&&((c.reb==='time'&&monthChanged&&monthN%c.interval===0)||(c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
     if(trigger){const old=total;v=allocate(v,w);total=v.reduce((a,b)=>a+b,0);unit*=total/old}
     if(keepCurve)curve.push({date:String(++day),value:unit,assets:total,invested});else day++;
     prevMonth=monthN;
   }
-  return {end:v.reduce((a,b)=>a+b,0),invested,curve};
+    yearEnds.push({year:y+1,value:unit,assets:v.reduce((a,b)=>a+b,0),invested});
+  }
+  return {end:v.reduce((a,b)=>a+b,0),invested,curve,yearEnds};
 }
 let runCount=0,lastRunSignature='';
 function rebalanceLabel(c){if(c.reb==='none')return '不再平衡';if(c.reb==='time')return `每 ${c.interval} 個月`;return `比例偏離 ${fmt(c.threshold)}`}
@@ -188,7 +190,7 @@ async function run(){
       $('result').classList.remove('hidden');$('details').classList.remove('hidden');
       $('lifeProgressWrap').classList.add('hidden');
       $('lifeCharts').classList.add('hidden');lifeVisualState=null;
-      const a=simulate(rows,c),b=simulate(rows,c,[1,0,0]);runCount++;
+      const a=simulate(rows,c),b=simulate(rows,{...c,reb:'none'},[1,0,0]);runCount++;
       const signature=JSON.stringify(c),changed=signature!==lastRunSignature;lastRunSignature=signature;
       $('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');
       $('range').textContent=rows[0].date+' 至 '+rows.at(-1).date;
@@ -213,7 +215,7 @@ async function run(){
       lifeYearGroups=prepareLifeYears(rows,c);
       const keys=Object.keys(lifeYearGroups).filter(y=>lifeYearGroups[y].length>=200&&y!==rows[0].date.slice(0,4)&&y!==rows.at(-1).date.slice(0,4));
       if(!keys.length)throw Error('完整年度資料不夠，不能隨機重組。');
-      const n=Math.min(2000,Math.max(100,Math.floor(num('runs'))));
+      const n=Math.floor(num('runs'));if(!Number.isFinite(n)||n<100||n>5000)throw Error('模擬次數請填 100～5000。');
       for(let r=0;r<n;r++){
         paths.push(Array.from({length:years},()=>keys[Math.floor(Math.random()*keys.length)]));
         if(r%20===0){setLifeProgress(3+12*(r+1)/n,`建立隨機人生：${r+1}／${n}`);await yieldUi()}
@@ -223,9 +225,9 @@ async function run(){
     const results=[];
     for(let i=0;i<paths.length;i++){
       const rawA=isBootstrap?simulateLifeYears(paths[i],lifeYearGroups,c,c.weights,true):simulate(paths[i],c,c.weights,'curve');
-      const rawB=isBootstrap?simulateLifeYears(paths[i],lifeYearGroups,c,[1,0,0],true):simulate(paths[i],c,[1,0,0],'curve');
-      const a={...rawA,mdd:curveDrawdown(rawA.curve),horizons:summarizeHorizons(rawA.curve,years,isBootstrap),curve:compressCurve(rawA.curve,isBootstrap)};
-      const b={...rawB,mdd:curveDrawdown(rawB.curve),horizons:summarizeHorizons(rawB.curve,years,isBootstrap),curve:compressCurve(rawB.curve,isBootstrap)};
+      const rawB=isBootstrap?simulateLifeYears(paths[i],lifeYearGroups,{...c,reb:'none'},[1,0,0],true):simulate(paths[i],{...c,reb:'none'},[1,0,0],'curve');
+      const a={...rawA,mdd:curveDrawdown(rawA.curve),horizons:isBootstrap?rawA.yearEnds:summarizeHorizons(rawA.curve,years,false),curve:compressCurve(rawA.curve,isBootstrap)};
+      const b={...rawB,mdd:curveDrawdown(rawB.curve),horizons:isBootstrap?rawB.yearEnds:summarizeHorizons(rawB.curve,years,false),curve:compressCurve(rawB.curve,isBootstrap)};
       const meta=isBootstrap?{label:`隨機 ${i+1}`}:{start:paths[i][0].date,end:paths[i].at(-1).date};
       results.push({a,b,...meta});
       if(i%2===0||i===paths.length-1){setLifeProgress(20+76*(i+1)/paths.length,`正在回測：${i+1}／${paths.length}`);await yieldUi()}
@@ -233,13 +235,13 @@ async function run(){
     setLifeProgress(98,'整理結果…');await yieldUi();
     runCount++;const signature=JSON.stringify({page,c,years,lifeMode:$('lifeMode').value,runs:num('runs')}),changed=signature!==lastRunSignature;lastRunSignature=signature;
     $('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');
-    $('message').textContent=`算完了（第 ${runCount} 次）｜${changed?'已用新設定':'設定沒變，重算結果相同'}｜每段都重跑投入、費用和再平衡`;
+    $('message').textContent=`算完了（第 ${runCount} 次）｜${isBootstrap?'重新隨機抽樣':changed?'已用新設定':'設定沒變，重算結果相同'}｜每段都重跑投入、費用和再平衡`;
     $('metricNote').textContent='虧錢機率和勝率都有算投入時間、交易費和再平衡。';
     const ends=results.map(x=>x.a.end),benchmarkEnds=results.map(x=>x.b.end),loss=results.filter(x=>x.a.end<x.a.invested).length/results.length,win=results.filter(x=>x.a.end>x.b.end).length/results.length;
     $('range').textContent=`${years} 年・${results.length} 組`;
     $('metrics').innerHTML=metric('通常最後有多少（中位數）',money(quantile(ends,.5)))+metric('虧錢機率',fmt(loss))+metric('贏過 0050／大盤',fmt(win))+metric('較差情況（後 10%）',money(quantile(ends,.1)))+metric('較好情況（前 10%）',money(quantile(ends,.9)))+metric('總共投入',money(results[0].a.invested));
     const worst=!isBootstrap?[...results].sort((x,y)=>x.a.end/x.a.invested-y.a.end/y.a.invested).slice(0,5):[];
-    $('comparison').innerHTML='<p class="hint">對照組的投入時間、金額都相同，全部買 0050／大盤。歷史區間可能重疊；隨機重組不是實際發生過的連續歷史。</p>'+(isBootstrap?'<div class="worst-wrap"><h3>最差歷史區間</h3><p class="hint">隨機重組沒有單一起訖日期。切回「歷史連續區間」才會顯示。</p></div>':`<div class="worst-wrap"><h3>最差五段歷史區間</h3><div class="heat-wrap"><table><thead><tr><th>期間</th><th>最後資產</th><th>策略年化</th><th>最大回撤</th></tr></thead><tbody>${worst.map(x=>`<tr><td>${x.start}<br>${x.end}</td><td>${money(x.a.end)}</td><td>${fmt(Math.pow(Math.max(x.a.curve.at(-1).value,0),1/years)-1)}</td><td>${fmt(x.a.mdd)}</td></tr>`).join('')}</tbody></table></div></div>`);
+    $('comparison').innerHTML='<p class="hint">對照組的投入時間、金額都相同，全部買 0050／大盤，不做再平衡。每月投入在每月第一筆資料買入，開始當月也投入。歷史區間可能重疊；隨機重組不是實際發生過的連續歷史。</p>'+(isBootstrap?'<div class="worst-wrap"><h3>最差歷史區間</h3><p class="hint">隨機重組沒有單一起訖日期。切回「歷史連續區間」才會顯示。</p></div>':`<div class="worst-wrap"><h3>最差五段歷史區間</h3><div class="heat-wrap"><table><thead><tr><th>期間</th><th>最後資產</th><th>策略年化</th><th>最大回撤</th></tr></thead><tbody>${worst.map(x=>`<tr><td>${x.start}<br>${x.end}</td><td>${money(x.a.end)}</td><td>${fmt(Math.pow(Math.max(x.a.curve.at(-1).value,0),1/years)-1)}</td><td>${fmt(x.a.mdd)}</td></tr>`).join('')}</tbody></table></div></div>`);
     const quantiles=[.1,.25,.5,.75,.9].map(q=>Array.from({length:81},(_,i)=>({date:String(i),value:quantile(results.map(x=>x.a.curve[i].value),q)})));const benchmarkQuantiles=[.1,.25,.5,.75,.9].map(q=>Array.from({length:81},(_,i)=>({date:String(i),value:quantile(results.map(x=>x.b.curve[i].value),q)})));
     const riskPoints=Array.from({length:years},(_,i)=>{const year=i+1;return {year,loss:results.filter(x=>x.a.horizons[i].assets<x.a.horizons[i].invested).length/results.length,win:results.filter(x=>x.a.horizons[i].assets>x.b.horizons[i].assets).length/results.length}});
     const drawdowns=results.map(x=>-x.a.mdd),benchmarkDrawdowns=results.map(x=>-x.b.mdd),invested=results[0].a.invested;
