@@ -2,26 +2,25 @@
 (()=>{
  const el=id=>document.getElementById(id), q=s=>document.querySelector(s), colors=['#3276d2','#0a9b83','#a663d7','#df9a39'];
  let data=null,view=null,pointer=null;const yearly=ms=>ms/(86400000*365.2425);
- const dollarTaiwan=rows=>{let m=[],t=0,stock=1,prev=null;for(let d of window.marketData){if(prev&&d[0]>'2003-06-30')stock*=d[1]/prev[1];m.push({date:d[0],stock,lever:d[4],future:d[3]});prev=d;}return m};
- const market=dollarTaiwan();
+ const market=window.marketData.map(d=>({date:d[0],lever:d[4],future:d[3]}));
  function calculate(range,cost){
   let begin=range==='ewt'?'2000-06-20':range==='0050'?'2003-06-30':'2014-11-03';
   let rows=data.rows.filter(r=>r[0]>=begin);if(rows.length<2)throw Error('這段期間的 EWT 資料不足。');
   let midx=0;while(midx+1<market.length&&market[midx+1].date<=rows[0][0])midx++;
-  const initMarket=market[midx],baseStock=initMarket.stock,baseLever=initMarket.lever;
+  const initMarket=market[midx],baseLever=initMarket.lever;
   if(range==='actual'&&!baseLever)throw Error('正二實盤起點資料不足。');
   const vals=[[{date:rows[0][0],value:1}]],names=['EWT 模擬正二'];
-  if(range!=='ewt'){vals.push([{date:rows[0][0],value:1}]);names.push('0050 每日兩倍（理想值）');vals.push([{date:rows[0][0],value:1}]);names.push('台指期模擬正二（扣費）')}
+  vals.push([{date:rows[0][0],value:1}]);names.push('大盤模擬正二（台指期）');
   if(range==='actual'){vals.push([{date:rows[0][0],value:1}]);names.push('00631L 實盤')}
-  let ewt=1,stock2=1,future2=1,lastTaiwan=initMarket,prev=rows[0];
+  let ewt=1,future2=1,lastTaiwan=initMarket,prev=rows[0];
   for(let i=1;i<rows.length;i++){
    const r=rows[i],days=yearly(Date.parse(r[0])-Date.parse(prev[0]));
    const annual=(cost==='none'?0:r[3])+(cost==='fee'?.015:0);
    ewt*=Math.max(0,1+2*(r[1]/prev[1]-1)-annual*days);
-   while(midx+1<market.length&&market[midx+1].date<=r[0]){let next=market[++midx];if(range!=='ewt'&&lastTaiwan.stock>0){stock2*=Math.max(0,1+2*(next.stock/lastTaiwan.stock-1));if(!Number.isFinite(next.future))throw Error('台指期資料缺漏：'+next.date);let yr=next.date.slice(0,4),rate=window.marketMeta.cashRates[yr]??window.marketMeta.cashRates['2025'],dt=yearly(Date.parse(next.date)-Date.parse(lastTaiwan.date));future2*=Math.max(0,1+2*next.future+(rate-.0104)*dt)}lastTaiwan=next;}
+   while(midx+1<market.length&&market[midx+1].date<=r[0]){let next=market[++midx];{if(!Number.isFinite(next.future))throw Error('台指期資料缺漏：'+next.date);let yr=next.date.slice(0,4),rate=window.marketMeta.cashRates[yr]??window.marketMeta.cashRates['2025'],dt=yearly(Date.parse(next.date)-Date.parse(lastTaiwan.date));future2*=Math.max(0,1+2*next.future+(rate-.0104)*dt)}lastTaiwan=next;}
    vals[0].push({date:r[0],value:ewt});
-   if(range!=='ewt'){vals[1].push({date:r[0],value:stock2});vals[2].push({date:r[0],value:future2})}
-   if(range==='actual')vals[3].push({date:r[0],value:lastTaiwan.lever?lastTaiwan.lever/baseLever:vals[3].at(-1).value});
+   vals[1].push({date:r[0],value:future2});
+   if(range==='actual')vals[2].push({date:r[0],value:lastTaiwan.lever?lastTaiwan.lever/baseLever:vals[2].at(-1).value});
    prev=r;
   }
   return {rows,vals,names};
