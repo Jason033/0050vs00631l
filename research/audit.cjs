@@ -10,7 +10,7 @@ const sandbox=vm.createContext({window:{marketData:[],addEventListener(){}},docu
 for(const name of ['data0.js','data1.js','data2.js','data3.js','data4.js','market-meta.js','app.js']){
   vm.runInContext(fs.readFileSync(path.join(root,name),'utf8'),sandbox,{filename:name});
 }
-const {data,modelReturn,simulate,earlyDividend,annual}=vm.runInContext('({data,modelReturn,simulate,earlyDividend,annual})',sandbox);
+const {data,modelReturn,simulate,earlyDividend,averageLogCarry,annual}=vm.runInContext('({data,modelReturn,simulate,earlyDividend,averageLogCarry,annual})',sandbox);
 const config={weights:[0,1,0],mode:'history',earlyDividend,collateral:0,fixed:0,initial:100,monthly:0,reb:'none'};
 const gross=(rows,fn)=>rows.reduce((v,r)=>v*fn(r),1);
 const model=(rows)=>gross(rows,r=>1+modelReturn(r,config,r.benchmarkGross))-1;
@@ -83,4 +83,9 @@ const quarterly={...config,weights:[0,.5,.5],reb:'time',interval:3};
 for(const [label,wind,w] of [['model quarterly',fitWindow,quarterly.weights],['00631L quarterly',replay,quarterly.weights],['0050',fitWindow,[1,0,0]]]){
   const q=simulate(wind,quarterly,w);
   console.log('FinLab cross-check',label,pct(q.annual),pct(q.mdd),pct(q.vol));
+}
+
+for(const assumed of [-.02,0,Math.expm1(averageLogCarry)]){
+  const result=simulate(span,{...config,earlyCarry:assumed});
+  console.log('pre-launch futures basis sensitivity',pct(assumed),pct(result.annual));
 }
