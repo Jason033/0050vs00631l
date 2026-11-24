@@ -21,5 +21,7 @@ const base={weights:[.4,.3,.3],mode:'history',earlyDividend:1,collateral:0,fixed
 const none=simulate(rows,base),quarterly=simulate(rows,{...base,reb:'time'}),ratio=simulate(rows,{...base,reb:'ratio'});
 for(const x of [quarterly,ratio]){assert(x.rebalanceCount>0);assert.notEqual(x.annual,none.annual);assert.notEqual(x.vol,none.vol);assert.notEqual(x.mdd,none.mdd)}
 const single=simulate(rows,{...base,weights:[0,1,0],reb:'time'});assert.equal(single.rebalanceCount,0);
-console.log('repeated calculation, DCA, and both rebalance methods passed');
+const lifeFns=vm.runInContext('({prepareLifeYears,simulateLifeYears,curveDrawdown,compressCurve,summarizeHorizons})',sandbox),groups=lifeFns.prepareLifeYears(data,base),lifeKeys=Object.keys(groups).filter(y=>groups[y].length>=200).slice(1,11),life=lifeFns.simulateLifeYears(lifeKeys,groups,base,base.weights,true);
+assert.equal(lifeKeys.length,10);assert.equal(life.invested,base.initial+base.monthly*120);assert.equal(lifeFns.compressCurve(life.curve,true).length,81);assert.equal(lifeFns.summarizeHorizons(life.curve,10,true).length,10);assert(lifeFns.curveDrawdown(life.curve)<=0);
+console.log('repeated calculation, DCA, both rebalance methods, and life dashboard inputs passed');
 console.log({none:{annual:none.annual,vol:none.vol,mdd:none.mdd},quarterly:{annual:quarterly.annual,vol:quarterly.vol,mdd:quarterly.mdd,count:quarterly.rebalanceCount},ratio:{annual:ratio.annual,vol:ratio.vol,mdd:ratio.mdd,count:ratio.rebalanceCount}});
