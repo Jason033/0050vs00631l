@@ -28,6 +28,15 @@ const print=x=>(x>=0?'+':'')+(x*100).toFixed(2)+'%';
 $('spreadTable').innerHTML=Object.entries(annual).map(([yr,[s,f]])=>
   `<tr><td>${yr}${yr==='2026'?' 至 11/23':yr==='2003'?' 自 1/2 收盤':''}</td><td>${print(s)}</td><td>${print(f)}</td><td>${((f-s)*100).toFixed(2)}</td></tr>`).join('')
   +`<tr><th colspan="3">2004–2025 平均相對年增率（1 倍曝險）</th><td>${print(Math.expm1(averageLogCarry))}</td></tr>`;
+// Unleveraged total-return TAIEX, independent of the 0050 proxy.
+function marketGrossWithDividend(r,mult=1,fallback=1){
+  const rate=(earlyDividends[r.date.slice(0,4)]??0)*mult;
+  return (r.marketGross??fallback)*Math.exp(Math.log1p(rate)*(r.divFraction??0));
+}
+function stockName(rows){return rows[0].date<'2003-06-30'?'0050（上市前用大盤）':'0050'}
+let lifeBenchmarkName='0050（上市前用大盤）';
+function selectedSeries(i){return seriesMode==='both'||(seriesMode==='strategy'?i===0:seriesMode==='market'?i===2:i===1)}
+const seriesColors=['#2466ba','#0ba48a','#a663d7'];
 function modelReturn(r, c, benchmarkGross){
   const years=r.elapsed,year=r.date.slice(0,4);
   const divRate=(earlyDividends[year]??0)*c.earlyDividend;
@@ -42,7 +51,7 @@ function modelReturn(r, c, benchmarkGross){
 }
 $('sources').onclick=()=>{document.querySelectorAll('[data-source-tab]').forEach((b,i)=>b.classList.toggle('active',i===0));document.querySelectorAll('[data-source-panel]').forEach((p,i)=>p.classList.toggle('hidden',i!==0));$('sourcesDialog').showModal()};document.querySelectorAll('[data-source-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-source-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-source-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.sourcePanel!==b.dataset.sourceTab))});$('info').onclick=()=>$('assumptions').showModal();$('showTable').onclick=()=>$('spreadDialog').showModal();document.querySelectorAll('.close').forEach(x=>x.onclick=()=>x.closest('dialog').close());
 $('dca').onchange=()=>$('dcaWrap').classList.toggle('hidden',!$('dca').checked);$('reb').onchange=()=>{$('timeFields').classList.toggle('hidden',$('reb').value!=='time');$('thresholdField').classList.toggle('hidden',$('reb').value!=='ratio')};$('reb').onchange();$('mode').onchange=()=>$('fixedField').classList.toggle('hidden',$('mode').value!=='fixed');$('lifeMode').onchange=()=>$('runsWrap').classList.toggle('hidden',$('lifeMode').value!=='bootstrap');
-function tab(p){page=p;$('tabBack').className=p==='back'?'active':'alt';$('tabLife').className=p==='life'?'active':'alt';$('lifeSettings').classList.toggle('hidden',p!=='life');$('lifeCharts').classList.add('hidden');if(p!=='life')$('lifeProgressWrap').classList.add('hidden');$('resultTitle').textContent=p==='back'?'歷史回測結果':'人生模擬結果';$('result').classList.add('hidden');$('details').classList.add('hidden');$('range').textContent='等待資料';chartPosition=null;$('chartTip').classList.add('hidden');$('message').textContent='選好設定，按計算。'}$('tabBack').onclick=()=>tab('back');$('tabLife').onclick=()=>tab('life');
+function tab(p){page=p;seriesMode='both';document.querySelectorAll('[data-series]').forEach(el=>el.className=(el.dataset.series==='both'?'':'alt')+(el.dataset.series==='market'&&p==='life'?' hidden':''));$('tabBack').className=p==='back'?'active':'alt';$('tabLife').className=p==='life'?'active':'alt';$('lifeSettings').classList.toggle('hidden',p!=='life');$('lifeCharts').classList.add('hidden');if(p!=='life')$('lifeProgressWrap').classList.add('hidden');$('resultTitle').textContent=p==='back'?'歷史回測結果':'人生模擬結果';$('result').classList.add('hidden');$('details').classList.add('hidden');$('range').textContent='等待資料';chartPosition=null;$('chartTip').classList.add('hidden');$('message').textContent='選好設定，按計算。'}$('tabBack').onclick=()=>tab('back');$('tabLife').onclick=()=>tab('life');
 $('file').onchange=async e=>{try{let text=(await e.target.files[0].text()).replace(/^\ufeff/,'');let lines=text.trim().split(/\r?\n/);let h=lines.shift().split(',').map(v=>v.trim().toLowerCase().replaceAll('"',''));let di=h.findIndex(v=>['date','日期'].includes(v)),pi=h.findIndex(v=>['total_return','adj close','adj_close','adjusted_close','含息指數','還原收盤價'].includes(v));if(di<0||pi<0)throw Error('缺少 date 或 total_return 欄位。');data=lines.map(line=>{let c=line.split(',');return {date:c[di]?.replaceAll('"','').trim(),price:Number(c[pi]?.replaceAll('"','').trim())}}).filter(x=>/^\d{4}-\d\d-\d\d$/.test(x.date)&&x.price>0).sort((a,b)=>a.date.localeCompare(b.date));if(data.length<3)throw Error('能用的資料不到 3 筆。');for(let i=1;i<data.length;i++)if(data[i].date===data[i-1].date)throw Error('日期重複：'+data[i].date);$('start').value=data[0].date;$('end').value=data.at(-1).date;setupDatePickers();$('dataStatus').textContent=`匯入完成：${data.length.toLocaleString()} 筆｜${data[0].date}～${data.at(-1).date}`;}catch(err){data=[];$('dataStatus').textContent='讀不了：'+err.message}};
 function inputs(){const weights=[num('stock')/100,num('lev')/100,num('cash')/100],start=$('start').value,end=$('end').value;if(weights.some(x=>!Number.isFinite(x)||x<0)||Math.abs(weights.reduce((a,b)=>a+b,0)-1)>1e-8)throw Error('0050、正二、現金加起來要等於 100%。');if(num('initial')<0||($('dca').checked&&num('monthly')<0)||(!num('initial')&&!($('dca').checked&&num('monthly')>0)))throw Error('投入金額不對。');if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||start>end)throw Error('日期不對。開始日不能晚於結束日。');if(num('interval')<1||num('threshold')<=0)throw Error('再平衡間隔和門檻要大於 0。');if(num('earlyDividend')<0||num('earlyDividend')>3||num('fixed')<=-100||num('collateral')<-20||num('collateral')>20)throw Error('舊股息、期貨差額或利率設定超出範圍。');return {weights,start,end,initial:num('initial'),monthly:$('dca').checked?num('monthly'):0,reb:$('reb').value,interval:Math.floor(num('interval'))*num('unit'),threshold:num('threshold')/100,mode:$('mode').value,fixed:num('fixed'),earlyDividend:num('earlyDividend'),collateral:num('collateral')/100};}
 function allocate(v,w){let lo=0,hi=v.reduce((a,b)=>a+b,0);for(let j=0;j<55;j++){let m=(lo+hi)/2;let cost=0;for(let k=0;k<2;k++){let diff=m*w[k]-v[k];cost+=diff>=0?diff*fee:-diff*(fee+tax)}let total=v[0]+v[1]+v[2];if(m+cost>total)hi=m;else lo=m}return w.map(x=>x*lo)}
@@ -58,7 +67,7 @@ function simulate(rows,c,w=c.weights,detail='full'){
     if(i){
       const before=v.reduce((a,b)=>a+b,0),benchmarkGross=r.benchmarkGross??r.price/rows[i-1].price;
       const divRate=(earlyDividends[r.date.slice(0,4)]??0)*c.earlyDividend;
-      const daily=benchmarkGross*Math.exp(Math.log1p(divRate)*(r.divFraction??0))-1;
+      const daily=(c.indexBenchmark?marketGrossWithDividend(r,c.earlyDividend,benchmarkGross):benchmarkGross*Math.exp(Math.log1p(divRate)*(r.divFraction??0)))-1;
       const levRet=modelReturn({...r,elapsed:r.elapsed??yearsDiff(rows[i-1].date,r.date),divFraction:r.divFraction??0},c,benchmarkGross);
       v[0]*=Math.max(0,1+daily);v[1]*=Math.max(0,1+levRet);
       const after=v.reduce((a,b)=>a+b,0),dr=before>0?after/before-1:0;
@@ -67,14 +76,14 @@ function simulate(rows,c,w=c.weights,detail='full'){
     }
     const deposit=(i===0?c.initial:0)+(month!==prevMonth?c.monthly:0);
     if(deposit){
-      const before=v.reduce((a,b)=>a+b,0);addMoney(v,deposit,w);
+      const before=v.reduce((a,b)=>a+b,0);if(c.indexBenchmark)v[0]+=deposit;else addMoney(v,deposit,w);
       const after=v.reduce((a,b)=>a+b,0),factor=after/(before+deposit);
       contributionCount++;tradingCosts+=Math.max(0,before+deposit-after);unit*=factor;
       if(full){peak=Math.max(peak,unit);mdd=Math.min(mdd,unit/peak-1);if(rets.length)rets[rets.length-1]=(1+rets.at(-1))*factor-1;flows.push([r.date,-deposit]);accountPeak=Math.max(accountPeak,after)}
       invested+=deposit;
     }
     const monthN=yr*12+Number(r.date.slice(5,7)),total=v.reduce((a,b)=>a+b,0);
-    const trigger=i>0&&total>0&&!(r.tradable===false&&w[0]>0)&&(
+    const trigger=!c.indexBenchmark&&i>0&&total>0&&!(r.tradable===false&&w[0]>0)&&(
       (c.reb==='time'&&month!==prevMonth&&(monthN-baseMonth)%c.interval===0)||
       (c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
     if(trigger){
@@ -96,14 +105,14 @@ function simulate(rows,c,w=c.weights,detail='full'){
 }
 function fmt(x){return Number.isFinite(x)?(x>1?numberChart(x)+' 倍':(x*100).toFixed(2)+'%'):'—'}function money(x){if(!Number.isFinite(x))return '—';const a=Math.abs(x),unit=a>=1e12?'兆':a>=1e8?'億':a>=1e4?'萬':'';const divisor=unit==='兆'?1e12:unit==='億'?1e8:unit==='萬'?1e4:1;return (unit?numberChart(x/divisor):Math.round(x).toLocaleString('zh-TW'))+unit+' 元'}function metric(label,value){return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`}
 let chartState=null,chartScale='log',lifeVisualState=null,seriesMode='both',chartPosition=null;const miniMeta={},miniPosition={};const chartGrid=()=>document.documentElement.dataset.theme==='dark'?'#2b3b50':'#e5ebf3',chartText=()=>document.documentElement.dataset.theme==='dark'?'#aebed3':'#71819a';
-function displayChart(curves,names,life=false){chartState={curves,names,life,fan:false};$('chartTitle').textContent=life?'各種結果會怎麼走':'資產走勢';$('legend').innerHTML=names.map((name,i)=>`<span><i style="background:${['#2466ba','#0ba48a','#e2a943'][i]}"></i>${name}</span>`).join('')+'<span>淨值從 100% 開始，超過 100% 顯示為本金倍數；不把加碼當報酬</span>';$('chart').style.display='block';renderChart()}
+function displayChart(curves,names,life=false){chartState={curves,names,life,fan:false};$('chartTitle').textContent=life?'各種結果會怎麼走':'資產走勢';$('legend').innerHTML=names.map((name,i)=>`<span><i style="background:${seriesColors[i]}"></i>${name}</span>`).join('')+'<span>淨值從 100% 開始，超過 100% 顯示為本金倍數；不把加碼當報酬</span>';$('chart').style.display='block';renderChart()}
 function displayLifeFan(curves,benchmarkCurves){chartState={curves,benchmarkCurves,names:['P10','P25','中位數','P75','P90'],life:true,fan:true};$('chartTitle').textContent='資產路徑範圍';$('legend').innerHTML='<span><i style="background:#d8e8fb;height:10px"></i>中間 80%</span><span><i style="background:#9fc3ef;height:10px"></i>中間 50%</span><span><i style="background:#174f91"></i>中位數</span><span>淨值從 100% 開始，超過 100% 顯示為本金倍數；不把加碼當報酬</span>';renderChart()}
 function renderChart(){
   if(!chartState)return;
-  if(chartState.fan)$('legend').innerHTML=(seriesMode!=='benchmark'?'<span><i style="background:#174f91"></i>你的設定中位數（藍色區間：P10–P90）</span>':'')+(seriesMode!=='strategy'?'<span><i style="background:#0ba48a"></i>0050／大盤中位數'+(seriesMode==='benchmark'?'（綠色區間：P10–P90）':'')+'</span>':'')+'<span>淨值從 100% 開始，超過 100% 顯示為本金倍數；不把加碼當報酬</span>';
+  if(chartState.fan)$('legend').innerHTML=(seriesMode!=='benchmark'?'<span><i style="background:#174f91"></i>你的設定中位數（藍色區間：P10–P90）</span>':'')+(seriesMode!=='strategy'?'<span><i style="background:#0ba48a"></i>'+lifeBenchmarkName+' 中位數'+(seriesMode==='benchmark'?'（綠色區間：P10–P90）':'')+'</span>':'')+'<span>淨值從 100% 開始，超過 100% 顯示為本金倍數；不把加碼當報酬</span>';
   const {life,fan}=chartState;let curves=chartState.curves;const canvas=$('chart'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,cw=canvas.clientWidth,ch=canvas.clientHeight;
   if(!cw||!ch)return;canvas.width=Math.round(cw*dpr);canvas.height=Math.round(ch*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cw,ch);
-  const allCurves=curves;const mainSelected=fan?curves:curves.filter((_,i)=>seriesMode==='both'||(seriesMode==='strategy'?i===0:i===1));const fanSelected=fan&&seriesMode==='benchmark'?chartState.benchmarkCurves:curves;const bounds=fan?(seriesMode==='both'?curves.concat(chartState.benchmarkCurves):fanSelected):mainSelected;
+  const allCurves=curves;const mainSelected=fan?curves:curves.filter((_,i)=>selectedSeries(i));const fanSelected=fan&&seriesMode==='benchmark'?chartState.benchmarkCurves:curves;const bounds=fan?(seriesMode==='both'?curves.concat(chartState.benchmarkCurves):fanSelected):mainSelected;
   const pad={l:62,r:16,t:14,b:34},pw=cw-pad.l-pad.r,ph=ch-pad.t-pad.b,vals=bounds.flatMap(c=>c.map(x=>x.value*100)).filter(x=>Number.isFinite(x)&&x>0);if(!vals.length)return;
   const isLog=chartScale==='log',trans=x=>isLog?Math.log10(Math.max(x,1e-12)):x;
   let lower=isLog?Math.floor(Math.log10(Math.min(...vals))):0,upper=isLog?Math.ceil(Math.log10(Math.max(...vals))):Math.max(...vals)*1.05;if(upper<=lower)upper=lower+1;
@@ -113,12 +122,12 @@ function renderChart(){
   ctx.textAlign='center';ctx.textBaseline='top';const c0=curves[0];for(let i=0;i<=4;i++){const idx=Math.round((c0.length-1)*i/4),x=pad.l+pw*i/4,label=life?`第 ${Math.round(idx/(c0.length-1)*Number($('years').value))} 年`:c0[idx].date.slice(0,4);ctx.fillStyle=chartText();ctx.fillText(label,x,ch-pad.b+10)}
   const drawLine=(c,color,width=2)=>{ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;c.forEach((p,i)=>{const x=xFor(i,c),y=yFor(p.value);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()};
   const fillBand=(low,high,color)=>{ctx.beginPath();high.forEach((p,i)=>{const x=xFor(i,high),y=yFor(p.value);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});for(let i=low.length-1;i>=0;i--)ctx.lineTo(xFor(i,low),yFor(low[i].value));ctx.closePath();ctx.fillStyle=color;ctx.fill()};
-  if(fan){if(seriesMode!=='benchmark'){fillBand(curves[0],curves[4],'#d8e8fb');fillBand(curves[1],curves[3],'#9fc3ef');drawLine(curves[2],'#174f91',2.5)}if(seriesMode!=='strategy'){const b=chartState.benchmarkCurves;if(seriesMode==='benchmark'){fillBand(b[0],b[4],'#c9efe9');fillBand(b[1],b[3],'#85d1c5')}drawLine(b[2],'#0ba48a',2.5)}}else allCurves.forEach((c,k)=>{if(seriesMode==='both'||(seriesMode==='strategy'?k===0:k===1))drawLine(c,['#2466ba','#0ba48a'][k])});
+  if(fan){if(seriesMode!=='benchmark'){fillBand(curves[0],curves[4],'#d8e8fb');fillBand(curves[1],curves[3],'#9fc3ef');drawLine(curves[2],'#174f91',2.5)}if(seriesMode!=='strategy'){const b=chartState.benchmarkCurves;if(seriesMode==='benchmark'){fillBand(b[0],b[4],'#c9efe9');fillBand(b[1],b[3],'#85d1c5')}drawLine(b[2],'#0ba48a',2.5)}}else { $('legend').innerHTML=chartState.names.map((name,i)=>selectedSeries(i)?`<span><i style="background:${seriesColors[i]}"></i>${name}</span>`:'').join('')+'<span>淨值走勢，不把加碼當報酬</span>'; } if(!fan)allCurves.forEach((c,k)=>{if(selectedSeries(k))drawLine(c,seriesColors[k])});
   if(chartPosition!==null){const x=pad.l+pw*chartPosition;ctx.strokeStyle=chartText();ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+ph);ctx.stroke();ctx.setLineDash([])}
   $('linearScale').className=isLog?'alt':'';$('logScale').className=isLog?'':'alt';
 }
 $('linearScale').onclick=()=>{chartScale='linear';renderChart()};$('logScale').onclick=()=>{chartScale='log';renderChart()};
-function chartPoint(e){if(!chartState)return;const rect=$('chart').getBoundingClientRect(),f=Math.max(0,Math.min(1,(e.clientX-rect.left-62)/(rect.width-78))),first=chartState.curves[0],idx=Math.round(f*(first.length-1)),date=chartState.life?`第 ${(f*Number($('years').value)).toFixed(1)} 年`:first[idx].date;chartPosition=f;renderChart();let lines=[date];if(chartState.fan){for(const [name,curves] of [['你的設定',chartState.curves],['0050／大盤',chartState.benchmarkCurves]])if(seriesMode==='both'||(seriesMode==='strategy'?name==='你的設定':name==='0050／大盤'))lines.push(`${name}：P10 ${fmt(curves[0][idx].value)}｜中位 ${fmt(curves[2][idx].value)}｜P90 ${fmt(curves[4][idx].value)}`)}else chartState.curves.forEach((c,k)=>{if(seriesMode==='both'||(seriesMode==='strategy'?k===0:k===1))lines.push(`${chartState.names[k]}：${fmt(c[Math.round(f*(c.length-1))].value)}`)});$('chartTip').textContent=lines.join(' | ');$('chartTip').classList.remove('hidden')}
+function chartPoint(e){if(!chartState)return;const rect=$('chart').getBoundingClientRect(),f=Math.max(0,Math.min(1,(e.clientX-rect.left-62)/(rect.width-78))),first=chartState.curves[0],idx=Math.round(f*(first.length-1)),date=chartState.life?`第 ${(f*Number($('years').value)).toFixed(1)} 年`:first[idx].date;chartPosition=f;renderChart();let lines=[date];if(chartState.fan){for(const [name,curves] of [['你的設定',chartState.curves],[lifeBenchmarkName,chartState.benchmarkCurves]])if(seriesMode==='both'||(seriesMode==='strategy'?name==='你的設定':name===lifeBenchmarkName))lines.push(`${name}：P10 ${fmt(curves[0][idx].value)}｜中位 ${fmt(curves[2][idx].value)}｜P90 ${fmt(curves[4][idx].value)}`)}else chartState.curves.forEach((c,k)=>{if(selectedSeries(k))lines.push(`${chartState.names[k]}：${fmt(c[Math.round(f*(c.length-1))].value)}`)});$('chartTip').textContent=lines.join(' | ');$('chartTip').classList.remove('hidden')}
 function numberChart(x){return x.toLocaleString('zh-TW',{maximumFractionDigits:2})}
 $('chart').addEventListener('pointerdown',chartPoint);$('chart').addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||e.buttons)chartPoint(e)});
 document.querySelectorAll('[data-series]').forEach(button=>button.onclick=()=>{seriesMode=button.dataset.series;document.querySelectorAll('[data-series]').forEach(b=>b.className=b===button?'':'alt');chartPosition=null;$('chartTip').classList.add('hidden');Object.keys(miniPosition).forEach(k=>delete miniPosition[k]);document.querySelectorAll('.mini-wrap .chart-tip').forEach(t=>t.classList.add('hidden'));renderChart();renderLifeVisuals()});
@@ -133,10 +142,10 @@ function drawHistogram(id,series,{log=false,marker=null,percentAxis=false}={}){
   miniMeta[id]={kind:'hist',min,max,bins,sets,log,percentAxis,pad,pw,ph};drawMiniPointer(id,ctx,pad,pw,ph);ctx.textAlign='center';ctx.textBaseline='top';for(let i=0;i<=3;i++){const value=min+(max-min)*i/3,x=pad.l+pw*i/3,label=log?shortMoney(10**value):percentAxis?(value*100).toFixed(0)+'%':value.toFixed(1);ctx.fillStyle=chartText();ctx.textAlign=i===0?'left':i===3?'right':'center';ctx.fillText(label,x,ch-pad.b+8)}
 }
 function drawRiskChart(points){const base=setupMiniCanvas('riskChart');if(!base||!points.length)return;const {ctx,cw,ch}=base,pad={l:44,r:12,t:10,b:30},pw=cw-pad.l-pad.r,ph=ch-pad.t-pad.b,xFor=year=>pad.l+(year-1)/Math.max(1,points.at(-1).year-1)*pw,yFor=value=>pad.t+ph-value*ph;ctx.font='11px system-ui';ctx.textBaseline='middle';ctx.textAlign='right';for(let i=0;i<=4;i++){const value=i/4,y=yFor(value);ctx.strokeStyle=chartGrid();ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(cw-pad.r,y);ctx.stroke();ctx.fillStyle=chartText();ctx.fillText(value*100+'%',pad.l-6,y)}ctx.textAlign='center';ctx.textBaseline='top';for(let i=0;i<=4;i++){const year=Math.max(1,Math.round(1+(points.at(-1).year-1)*i/4)),x=xFor(year);ctx.fillText(`第 ${year} 年`,x,ch-pad.b+8)}for(const [key,color] of [['loss','#d14b4b'],['win','#2466ba']]){ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2.5;points.forEach((p,i)=>{const x=xFor(p.year),y=yFor(p[key]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}miniMeta.riskChart={kind:'risk',points,pad,pw,ph};drawMiniPointer('riskChart',ctx,pad,pw,ph)}
-function renderLifeVisuals(){if(!lifeVisualState)return;const s=lifeVisualState;drawHistogram('terminalChart',[{name:'你的設定',values:s.ends,color:'#2466ba'},{name:'0050／大盤',values:s.benchmarkEnds,color:'#0ba48a'}],{log:true});drawRiskChart(s.riskPoints);drawHistogram('drawdownChart',[{name:'你的設定',values:s.drawdowns,color:'#2466ba'},{name:'0050／大盤',values:s.benchmarkDrawdowns,color:'#0ba48a'}],{percentAxis:true})}
+function renderLifeVisuals(){if(!lifeVisualState)return;const s=lifeVisualState;drawHistogram('terminalChart',[{name:'你的設定',values:s.ends,color:'#2466ba'},{name:lifeBenchmarkName,values:s.benchmarkEnds,color:'#0ba48a'}],{log:true});drawRiskChart(s.riskPoints);drawHistogram('drawdownChart',[{name:'你的設定',values:s.drawdowns,color:'#2466ba'},{name:lifeBenchmarkName,values:s.benchmarkDrawdowns,color:'#0ba48a'}],{percentAxis:true})}
 
 function drawMiniPointer(id,ctx,pad,pw,ph){if(miniPosition[id]===undefined)return;const x=pad.l+pw*miniPosition[id];ctx.strokeStyle=chartText();ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+ph);ctx.stroke();ctx.setLineDash([])}
-function miniPoint(id,e){const m=miniMeta[id];if(!m)return;const rect=$(id).getBoundingClientRect(),f=Math.max(0,Math.min(1,(e.clientX-rect.left-m.pad.l)/m.pw));miniPosition[id]=f;renderLifeVisuals();let lines;if(m.kind==='risk'){const p=m.points[Math.round(f*(m.points.length-1))];lines=[`第 ${p.year} 年`,`虧錢 ${fmt(p.loss)}`,`贏過 0050／大盤 ${fmt(p.win)}`]}else{const i=Math.min(m.bins-1,Math.floor(f*m.bins)),a=m.min+(m.max-m.min)*i/m.bins,b=m.min+(m.max-m.min)*(i+1)/m.bins,format=x=>m.log?money(10**x):m.percentAxis?fmt(x):numberChart(x);lines=[`${format(a)}～${format(b)}`,...m.sets.map(s=>`${s.name}：${fmt(s.counts[i])}`)]}const tip=$(id+'Tip');tip.textContent=lines.join(' | ');tip.classList.remove('hidden')}
+function miniPoint(id,e){const m=miniMeta[id];if(!m)return;const rect=$(id).getBoundingClientRect(),f=Math.max(0,Math.min(1,(e.clientX-rect.left-m.pad.l)/m.pw));miniPosition[id]=f;renderLifeVisuals();let lines;if(m.kind==='risk'){const p=m.points[Math.round(f*(m.points.length-1))];lines=[`第 ${p.year} 年`,`虧錢 ${fmt(p.loss)}`,`贏過 ${lifeBenchmarkName} ${fmt(p.win)}`]}else{const i=Math.min(m.bins-1,Math.floor(f*m.bins)),a=m.min+(m.max-m.min)*i/m.bins,b=m.min+(m.max-m.min)*(i+1)/m.bins,format=x=>m.log?money(10**x):m.percentAxis?fmt(x):numberChart(x);lines=[`${format(a)}～${format(b)}`,...m.sets.map(s=>`${s.name}：${fmt(s.counts[i])}`)]}const tip=$(id+'Tip');tip.textContent=lines.join(' | ');tip.classList.remove('hidden')}
 ['terminalChart','riskChart','drawdownChart'].forEach(id=>{const canvas=$(id);canvas.addEventListener('pointerdown',e=>miniPoint(id,e));canvas.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||e.buttons)miniPoint(id,e)})});
 window.addEventListener('resize',()=>{if(!$('result').classList.contains('hidden')){renderChart();renderLifeVisuals()}});
 function pointAt(curve,fraction,isLife){if(isLife)return curve[Math.min(curve.length-1,Math.round(fraction*(curve.length-1)))];const start=Date.parse(curve[0].date),end=Date.parse(curve.at(-1).date),target=start+fraction*(end-start);let lo=0,hi=curve.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(Date.parse(curve[mid].date)<=target)lo=mid;else hi=mid-1}return curve[lo]}
@@ -148,21 +157,21 @@ function prepareLifeYears(rows,c){
   const grouped={};
   for(let i=1;i<rows.length;i++){
     const r=rows[i],benchmarkGross=r.benchmarkGross??r.price/rows[i-1].price,divRate=(earlyDividends[r.date.slice(0,4)]??0)*c.earlyDividend;
-    const stockGross=benchmarkGross*Math.exp(Math.log1p(divRate)*(r.divFraction??0));
+    const stockGross=benchmarkGross*Math.exp(Math.log1p(divRate)*(r.divFraction??0)),indexGross=marketGrossWithDividend(r,c.earlyDividend,benchmarkGross);
     const levGross=1+modelReturn({...r,elapsed:r.elapsed??yearsDiff(rows[i-1].date,r.date),divFraction:r.divFraction??0},c,benchmarkGross);
-    (grouped[r.date.slice(0,4)]??=[]).push({stockGross:Math.max(0,stockGross),levGross:Math.max(0,levGross),month:Number(r.date.slice(5,7)),tradable:r.tradable});
+    (grouped[r.date.slice(0,4)]??=[]).push({stockGross:Math.max(0,stockGross),indexGross:Math.max(0,indexGross),levGross:Math.max(0,levGross),month:Number(r.date.slice(5,7)),tradable:r.tradable});
   }
   return grouped;
 }
 function simulateLifeYears(yearKeys,grouped,c,w=c.weights,keepCurve=true){
   let v=[0,0,0],invested=0,unit=1,prevMonth=0,day=0,curve=[],yearEnds=[];
-  const first=c.initial+c.monthly;if(first){addMoney(v,first,w);invested+=first;unit=v.reduce((a,b)=>a+b,0)/first}
+  const first=c.initial+c.monthly;if(first){if(c.indexBenchmark)v[0]+=first;else addMoney(v,first,w);invested+=first;unit=v.reduce((a,b)=>a+b,0)/first}
   if(keepCurve)curve.push({date:'0',value:unit,assets:v.reduce((a,b)=>a+b,0),invested});
   for(let y=0;y<yearKeys.length;y++){for(const r of grouped[yearKeys[y]]){
-    const before=v.reduce((a,b)=>a+b,0);v[0]*=r.stockGross;v[1]*=r.levGross;let total=v.reduce((a,b)=>a+b,0);if(before>0)unit*=total/before;
+    const before=v.reduce((a,b)=>a+b,0);v[0]*=c.indexBenchmark?r.indexGross:r.stockGross;v[1]*=r.levGross;let total=v.reduce((a,b)=>a+b,0);if(before>0)unit*=total/before;
     const monthN=y*12+r.month-1,monthChanged=monthN!==prevMonth;
-    if(monthChanged&&c.monthly){const old=total;addMoney(v,c.monthly,w);total=v.reduce((a,b)=>a+b,0);unit*=total/(old+c.monthly);invested+=c.monthly}
-    const trigger=day>0&&total>0&&!(r.tradable===false&&w[0]>0)&&((c.reb==='time'&&monthChanged&&monthN%c.interval===0)||(c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
+    if(monthChanged&&c.monthly){const old=total;if(c.indexBenchmark)v[0]+=c.monthly;else addMoney(v,c.monthly,w);total=v.reduce((a,b)=>a+b,0);unit*=total/(old+c.monthly);invested+=c.monthly}
+    const trigger=!c.indexBenchmark&&day>0&&total>0&&!(r.tradable===false&&w[0]>0)&&((c.reb==='time'&&monthChanged&&monthN%c.interval===0)||(c.reb==='ratio'&&v.some((x,k)=>Math.abs(x/total-w[k])>=c.threshold)));
     if(trigger){const old=total;v=allocate(v,w);total=v.reduce((a,b)=>a+b,0);unit*=total/old}
     if(keepCurve)curve.push({date:String(++day),value:unit,assets:total,invested});else day++;
     prevMonth=monthN;
@@ -190,16 +199,29 @@ async function run(){
       $('result').classList.remove('hidden');$('details').classList.remove('hidden');
       $('lifeProgressWrap').classList.add('hidden');
       $('lifeCharts').classList.add('hidden');lifeVisualState=null;
-      const a=simulate(rows,c),b=simulate(rows,{...c,reb:'none'},[1,0,0]);runCount++;
+      const a=simulate(rows,c),b=simulate(rows,{...c,reb:'none'},[1,0,0]),hasIndex=data===builtIn, m=hasIndex?simulate(rows,{...c,reb:'none',indexBenchmark:true},[1,0,0]):null;
+      const benchName=hasIndex?stockName(rows):'匯入資料（1 倍）';
+      document.querySelectorAll('[data-series="benchmark"]').forEach(el=>el.textContent=benchName);
+      document.querySelectorAll('[data-series="market"]').forEach(el=>el.classList.toggle('hidden',!hasIndex));
+      if(!hasIndex&&seriesMode==='market')seriesMode='both';
+      document.querySelectorAll('[data-series]').forEach(el=>el.className=(el.dataset.series===seriesMode?'':'alt')+(el.dataset.series==='market'&&!hasIndex?' hidden':''));
+      runCount++;
       const signature=JSON.stringify(c),changed=signature!==lastRunSignature;lastRunSignature=signature;
       $('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');
       $('range').textContent=rows[0].date+' 至 '+rows.at(-1).date;
       $('message').textContent=`算完了（第 ${runCount} 次）｜${changed?'已用新設定':'設定沒變，重算結果相同'}｜投入 ${a.contributionCount} 次｜再平衡 ${a.rebalanceCount} 次｜${rebalanceLabel(c)}`;
       $('metrics').innerHTML=metric('最後有多少',money(a.end))+metric('總共投入',money(a.invested))+metric('總報酬',fmt(a.ret))+metric('你的年化（XIRR）',fmt(a.annual))+metric('年化波動',fmt(a.vol))+metric('最大回撤',fmt(a.mdd))+($('dca').checked?metric('帳戶回撤（有算入金）',fmt(a.accountMdd)):'');
       $('metricNote').textContent=$('dca').checked?'總報酬超過 100% 時，以獲利倍數顯示。你的年化有算每次加碼時間。波動和最大回撤不把存款當報酬；帳戶回撤則把入金後的帳戶金額算進去。':'總報酬超過 100% 時，以獲利倍數顯示；波動和回撤已扣交易費。';
-      $('comparison').innerHTML=`<table><tr><th>看什麼</th><th>你的設定</th><th>全買 0050／大盤</th></tr>${[['最後有多少',money(a.end),money(b.end)],['總共投入',money(a.invested),money(b.invested)],['總報酬',fmt(a.ret),fmt(b.ret)],['你的年化（XIRR）',fmt(a.annual),fmt(b.annual)],['策略本身年化（不算加碼）',fmt(a.twrAnnual),fmt(b.twrAnnual)],['年化波動',fmt(a.vol),fmt(b.vol)],['最大回撤',fmt(a.mdd),fmt(b.mdd)],['帳戶回撤（有算入金）',fmt(a.accountMdd),fmt(b.accountMdd)],['投入次數',String(a.contributionCount),String(b.contributionCount)],['再平衡次數',String(a.rebalanceCount),String(b.rebalanceCount)],['交易成本',money(a.tradingCosts),money(b.tradingCosts)]].map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')}</table>`;
-      displayChart([a.curve,b.curve],['你的設定','全買 0050／大盤']);return;
+      const comparisons=[a,b,...(m?[m]:[])],names=['你的設定',benchName,...(m?['含息大盤（1 倍）']:[])];
+      const fields=[['最後有多少',x=>money(x.end)],['總共投入',x=>money(x.invested)],['總報酬',x=>fmt(x.ret)],['你的年化（XIRR）',x=>fmt(x.annual)],['策略本身年化（不算加碼）',x=>fmt(x.twrAnnual)],['年化波動',x=>fmt(x.vol)],['最大回撤',x=>fmt(x.mdd)],['帳戶回撤（有算入金）',x=>fmt(x.accountMdd)],['投入次數',x=>String(x.contributionCount)],['再平衡次數',x=>String(x.rebalanceCount)],['交易成本',x=>money(x.tradingCosts)]];
+      $('comparison').innerHTML='<div class="heat-wrap"><table><tr><th>看什麼</th>'+names.map(n=>'<th>'+n+'</th>').join('')+'</tr>'+fields.map(([label,fn])=>'<tr><td>'+label+'</td>'+comparisons.map(x=>'<td>'+fn(x)+'</td>').join('')+'</tr>').join('')+'</table></div><p class="hint">'+(hasIndex?'大盤使用加權報酬指數（2003 年前股息估算），股息再投入、不扣 ETF 或交易費；0050 於 2003/06/30 上市，之前沿用大盤代理。所有曲線使用相同投入日期與金額。':'自訂 CSV 僅有一組價格，無法獨立比較大盤與 0050。')+'</p>';
+      displayChart(comparisons.map(x=>x.curve),names);return;
     }
+    const useIndex=data===builtIn&&$('lifeBenchmark').value==='market',lifeBenchmarkConfig={...c,reb:'none',indexBenchmark:useIndex};
+    lifeBenchmarkName=useIndex?'含息大盤（1 倍）':data===builtIn?stockName(rows):'匯入資料（1 倍）';
+    document.querySelectorAll('[data-life-benchmark]').forEach(el=>el.textContent=lifeBenchmarkName);
+    document.querySelectorAll('[data-series="benchmark"]').forEach(el=>el.textContent=lifeBenchmarkName);
+    if(seriesMode==='market')seriesMode='both';document.querySelectorAll('[data-series]').forEach(el=>el.className=(el.dataset.series===seriesMode?'':'alt')+(el.dataset.series==='market'?' hidden':''));
     const years=Math.floor(num('years'));if(years<1||years>70)throw Error('投資年數只能填 1～70 年。');
     $('run').disabled=true;setLifeProgress(1,'準備資料…');await yieldUi();
     let paths=[],lifeYearGroups=null,isBootstrap=$('lifeMode').value==='bootstrap';
@@ -225,7 +247,7 @@ async function run(){
     const results=[];
     for(let i=0;i<paths.length;i++){
       const rawA=isBootstrap?simulateLifeYears(paths[i],lifeYearGroups,c,c.weights,true):simulate(paths[i],c,c.weights,'curve');
-      const rawB=isBootstrap?simulateLifeYears(paths[i],lifeYearGroups,{...c,reb:'none'},[1,0,0],true):simulate(paths[i],{...c,reb:'none'},[1,0,0],'curve');
+      const rawB=isBootstrap?simulateLifeYears(paths[i],lifeYearGroups,lifeBenchmarkConfig,[1,0,0],true):simulate(paths[i],lifeBenchmarkConfig,[1,0,0],'curve');
       const a={...rawA,mdd:curveDrawdown(rawA.curve),horizons:isBootstrap?rawA.yearEnds:summarizeHorizons(rawA.curve,years,false),curve:compressCurve(rawA.curve,isBootstrap)};
       const b={...rawB,mdd:curveDrawdown(rawB.curve),horizons:isBootstrap?rawB.yearEnds:summarizeHorizons(rawB.curve,years,false),curve:compressCurve(rawB.curve,isBootstrap)};
       const meta=isBootstrap?{label:`隨機 ${i+1}`}:{start:paths[i][0].date,end:paths[i].at(-1).date};
@@ -233,23 +255,23 @@ async function run(){
       if(i%2===0||i===paths.length-1){setLifeProgress(20+76*(i+1)/paths.length,`正在回測：${i+1}／${paths.length}`);await yieldUi()}
     }
     setLifeProgress(98,'整理結果…');await yieldUi();
-    runCount++;const signature=JSON.stringify({page,c,years,lifeMode:$('lifeMode').value,runs:num('runs')}),changed=signature!==lastRunSignature;lastRunSignature=signature;
+    runCount++;const signature=JSON.stringify({page,c,years,useIndex,lifeMode:$('lifeMode').value,runs:num('runs')}),changed=signature!==lastRunSignature;lastRunSignature=signature;
     $('run').textContent='重新計算';$('result').classList.remove('stale');$('details').classList.remove('stale');
     $('message').textContent=`算完了（第 ${runCount} 次）｜${isBootstrap?'重新隨機抽樣':changed?'已用新設定':'設定沒變，重算結果相同'}｜每段都重跑投入、費用和再平衡`;
     $('metricNote').textContent='虧錢機率和勝率都有算投入時間、交易費和再平衡。';
     const ends=results.map(x=>x.a.end),benchmarkEnds=results.map(x=>x.b.end),loss=results.filter(x=>x.a.end<x.a.invested).length/results.length,win=results.filter(x=>x.a.end>x.b.end).length/results.length;
     $('range').textContent=`${years} 年・${results.length} 組`;
-    $('metrics').innerHTML=metric('通常最後有多少（中位數）',money(quantile(ends,.5)))+metric('虧錢機率',fmt(loss))+metric('贏過 0050／大盤',fmt(win))+metric('較差情況（後 10%）',money(quantile(ends,.1)))+metric('較好情況（前 10%）',money(quantile(ends,.9)))+metric('總共投入',money(results[0].a.invested));
+    $('metrics').innerHTML=metric('通常最後有多少（中位數）',money(quantile(ends,.5)))+metric('虧錢機率',fmt(loss))+metric('贏過 '+lifeBenchmarkName,fmt(win))+metric('較差情況（後 10%）',money(quantile(ends,.1)))+metric('較好情況（前 10%）',money(quantile(ends,.9)))+metric('總共投入',money(results[0].a.invested));
     const worst=!isBootstrap?[...results].sort((x,y)=>x.a.end/x.a.invested-y.a.end/y.a.invested).slice(0,5):[];
-    $('comparison').innerHTML='<p class="hint">對照組的投入時間、金額都相同，全部買 0050／大盤，不做再平衡。每月投入在每月第一筆資料買入，開始當月也投入。歷史區間可能重疊；隨機重組不是實際發生過的連續歷史。</p>'+(isBootstrap?'<div class="worst-wrap"><h3>最差歷史區間</h3><p class="hint">隨機重組沒有單一起訖日期。切回「歷史連續區間」才會顯示。</p></div>':`<div class="worst-wrap"><h3>最差五段歷史區間</h3><div class="heat-wrap"><table><thead><tr><th>期間</th><th>最後資產</th><th>策略年化</th><th>最大回撤</th></tr></thead><tbody>${worst.map(x=>`<tr><td>${x.start}<br>${x.end}</td><td>${money(x.a.end)}</td><td>${fmt(Math.pow(Math.max(x.a.curve.at(-1).value,0),1/years)-1)}</td><td>${fmt(x.a.mdd)}</td></tr>`).join('')}</tbody></table></div></div>`);
+    $('comparison').innerHTML='<p class="hint">對照組的投入時間、金額都相同，全部使用 '+lifeBenchmarkName+'，不做再平衡。'+(useIndex?'大盤為理論指數，不扣交易費。':'')+'每月投入在每月第一筆資料買入，開始當月也投入。歷史區間可能重疊；隨機重組不是實際發生過的連續歷史。</p>'+(isBootstrap?'<div class="worst-wrap"><h3>最差歷史區間</h3><p class="hint">隨機重組沒有單一起訖日期。切回「歷史連續區間」才會顯示。</p></div>':`<div class="worst-wrap"><h3>最差五段歷史區間</h3><div class="heat-wrap"><table><thead><tr><th>期間</th><th>最後資產</th><th>策略年化</th><th>最大回撤</th></tr></thead><tbody>${worst.map(x=>`<tr><td>${x.start}<br>${x.end}</td><td>${money(x.a.end)}</td><td>${fmt(Math.pow(Math.max(x.a.curve.at(-1).value,0),1/years)-1)}</td><td>${fmt(x.a.mdd)}</td></tr>`).join('')}</tbody></table></div></div>`);
     const quantiles=[.1,.25,.5,.75,.9].map(q=>Array.from({length:81},(_,i)=>({date:String(i),value:quantile(results.map(x=>x.a.curve[i].value),q)})));const benchmarkQuantiles=[.1,.25,.5,.75,.9].map(q=>Array.from({length:81},(_,i)=>({date:String(i),value:quantile(results.map(x=>x.b.curve[i].value),q)})));
     const riskPoints=Array.from({length:years},(_,i)=>{const year=i+1;return {year,loss:results.filter(x=>x.a.horizons[i].assets<x.a.horizons[i].invested).length/results.length,win:results.filter(x=>x.a.horizons[i].assets>x.b.horizons[i].assets).length/results.length}});
     const drawdowns=results.map(x=>-x.a.mdd),benchmarkDrawdowns=results.map(x=>-x.b.mdd),invested=results[0].a.invested;
     lifeVisualState={ends,benchmarkEnds,invested,drawdowns,benchmarkDrawdowns,riskPoints};
     $('result').classList.remove('hidden');$('details').classList.remove('hidden');$('lifeCharts').classList.remove('hidden');
-    $('terminalNote').textContent=`你的中位數 ${money(quantile(ends,.5))}｜0050／大盤 ${money(quantile(benchmarkEnds,.5))}`;
-    $('riskNote').textContent=`第 ${years} 年：虧錢 ${fmt(riskPoints.at(-1).loss)}｜贏過 0050／大盤 ${fmt(riskPoints.at(-1).win)}`;
-    $('drawdownNote').textContent=`你的中位數回撤 ${fmt(-quantile(drawdowns,.5))}｜最差 10% 約 ${fmt(-quantile(drawdowns,.9))}｜0050／大盤中位數 ${fmt(-quantile(benchmarkDrawdowns,.5))}`;
+    $('terminalNote').textContent=`你的中位數 ${money(quantile(ends,.5))}｜${lifeBenchmarkName} ${money(quantile(benchmarkEnds,.5))}`;
+    $('riskNote').textContent=`第 ${years} 年：虧錢 ${fmt(riskPoints.at(-1).loss)}｜贏過 ${lifeBenchmarkName} ${fmt(riskPoints.at(-1).win)}`;
+    $('drawdownNote').textContent=`你的中位數回撤 ${fmt(-quantile(drawdowns,.5))}｜最差 10% 約 ${fmt(-quantile(drawdowns,.9))}｜${lifeBenchmarkName} 中位數 ${fmt(-quantile(benchmarkDrawdowns,.5))}`;
     displayLifeFan(quantiles,benchmarkQuantiles);renderLifeVisuals();setLifeProgress(100,'完成');
   }catch(e){
     $('message').textContent=e.message;$('result').classList.add('hidden');$('details').classList.add('hidden');$('run').textContent='重新計算';
